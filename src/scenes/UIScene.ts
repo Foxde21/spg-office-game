@@ -3,7 +3,9 @@ import type { Dialogue, DialogueChoice, ItemData } from '../types'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
+import { LocationManager } from '../managers/LocationManager'
 import { CAREER_LEVELS, COLORS } from '../config'
+import type { LocationId } from '../types/Location'
 
 export class UIScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container
@@ -19,13 +21,17 @@ export class UIScene extends Phaser.Scene {
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
   private statusText!: Phaser.GameObjects.Text
-  private stressWarning!: Phaser.GameObjects.Text
 
   private inventoryBox!: Phaser.GameObjects.Container
   private inventoryOpen = false
   private inventoryKey!: Phaser.Input.Keyboard.Key
 
   private questPanel!: Phaser.GameObjects.Container
+  private minimap!: Phaser.GameObjects.Container
+  private minimapLocationText!: Phaser.GameObjects.Text
+  private locationManager!: LocationManager
+  private questKey!: Phaser.Input.Keyboard.Key
+  private questPanelOpen = false
 
   constructor() {
     super({ key: 'UIScene' })
@@ -35,11 +41,13 @@ export class UIScene extends Phaser.Scene {
     this.gameState = GameStateManager.getInstance(this.game)
     this.inventory = InventoryManager.getInstance(this.game)
     this.questManager = QuestManager.getInstance(this.game)
+    this.locationManager = LocationManager.getInstance(this.game)
     
     this.createStatusBar()
     this.createDialogueBox()
     this.createInventoryBox()
     this.createQuestPanel()
+    this.createMinimap()
     this.setupEventListeners()
     this.setupInput()
   }
@@ -47,50 +55,61 @@ export class UIScene extends Phaser.Scene {
   private setupInput() {
     this.inventoryKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I)
     this.inventoryKey.on('down', this.toggleInventory, this)
+    this.questKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q)
+    this.questKey.on('down', this.toggleQuestPanel, this)
   }
 
   private createStatusBar() {
-    const container = this.add.container(20, 20)
+    const boxWidth = 360
+    const boxHeight = 70
+    const x = 1280 / 2 - boxWidth / 2
+    const y = 720 - boxHeight - 10
+
+    const container = this.add.container(x, y)
 
     const bg = this.add.graphics()
-    bg.fillStyle(0x1a1a2e, 0.9)
-    bg.fillRoundedRect(0, 0, 350, 80, 8)
+    bg.fillStyle(0x1a1a2e, 0.85)
+    bg.fillRoundedRect(0, 0, boxWidth, boxHeight, 8)
+    bg.lineStyle(1, 0x4a4a6a)
+    bg.strokeRoundedRect(0, 0, boxWidth, boxHeight, 8)
 
     const careerLevel = this.gameState.getCareerLevel()
     const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
     
-    this.statusText = this.add.text(10, 10, `Уровень: ${levelData?.title || 'Junior'}`, {
+    this.statusText = this.add.text(boxWidth / 2, 10, `${levelData?.title || 'Junior'}`, {
       fontSize: '14px',
+      fontStyle: 'bold',
       color: '#ffffff',
     })
-
-    const stressLabel = this.add.text(10, 32, 'Стресс:', {
-      fontSize: '12px',
-      color: '#ffffff',
-    })
+    this.statusText.setOrigin(0.5, 0)
 
     this.stressBar = this.add.graphics()
-    this.drawBar(this.stressBar, 80, 32, 200, 16, 0, COLORS.danger)
+    this.drawBar(this.stressBar, 20, 32, 150, 14, 0, COLORS.danger)
 
-    const respectLabel = this.add.text(10, 54, 'Уважение:', {
-      fontSize: '12px',
-      color: '#ffffff',
-    })
-
-    this.respectBar = this.add.graphics()
-    this.drawBar(this.respectBar, 80, 54, 200, 16, 0, COLORS.success)
-
-    this.stressWarning = this.add.text(300, 40, '', {
-      fontSize: '20px',
-    })
-    this.stressWarning.setOrigin(0.5)
-
-    const inventoryHint = this.add.text(360, 30, '[I] Инвентарь', {
+    const stressLabel = this.add.text(180, 30, 'Стресс', {
       fontSize: '12px',
       color: '#a29bfe',
     })
 
-    container.add([bg, this.statusText, stressLabel, this.stressBar, respectLabel, this.respectBar, this.stressWarning, inventoryHint])
+    this.respectBar = this.add.graphics()
+    this.drawBar(this.respectBar, 20, 50, 150, 14, 0, COLORS.success)
+
+    const respectLabel = this.add.text(180, 48, 'Уважение', {
+      fontSize: '12px',
+      color: '#a29bfe',
+    })
+
+    const divider = this.add.graphics()
+    divider.lineStyle(1, 0x4a4a6a)
+    divider.lineBetween(boxWidth - 100, 15, boxWidth - 100, boxHeight - 15)
+
+    const hints = this.add.text(boxWidth - 85, 18, '[I] Инвентарь\n[Q] Квесты', {
+      fontSize: '11px',
+      color: '#a29bfe',
+      lineSpacing: 6,
+    })
+
+    container.add([bg, divider, this.statusText, stressLabel, this.stressBar, respectLabel, this.respectBar, hints])
 
     this.updateBars()
   }
@@ -121,34 +140,26 @@ export class UIScene extends Phaser.Scene {
     const respect = this.gameState.getRespect()
 
     const stressColor = stress > 70 ? COLORS.danger : stress > 40 ? COLORS.warning : COLORS.success
-    this.drawBar(this.stressBar, 80, 32, 200, 16, stress, stressColor)
-    this.drawBar(this.respectBar, 80, 54, 200, 16, respect, COLORS.success)
-
-    if (stress > 70) {
-      this.stressWarning.setText('⚠️')
-    } else if (stress > 50) {
-      this.stressWarning.setText('😰')
-    } else {
-      this.stressWarning.setText('')
-    }
+    this.drawBar(this.stressBar, 20, 32, 150, 14, stress, stressColor)
+    this.drawBar(this.respectBar, 20, 50, 150, 14, respect, COLORS.success)
 
     const careerLevel = this.gameState.getCareerLevel()
     const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
-    this.statusText.setText(`Уровень: ${levelData?.title || 'Junior'}`)
+    this.statusText.setText(`${levelData?.title || 'Junior'}`)
   }
 
   private createQuestPanel() {
-    const boxWidth = 250
+    const boxWidth = 280
     const boxHeight = 200
-    const x = 1280 - boxWidth / 2 - 20
-    const y = 150 + boxHeight / 2
+    const x = 1280 / 2
+    const y = 720 / 2
 
     this.questPanel = this.add.container(x, y)
 
     const background = this.add.graphics()
-    background.fillStyle(0x1a1a2e, 0.9)
+    background.fillStyle(0x1a1a2e, 0.95)
     background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
-    background.lineStyle(1, 0x4a4a6a)
+    background.lineStyle(2, 0x6c5ce7)
     background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
 
     const title = this.add.text(-boxWidth / 2 + 15, -boxHeight / 2 + 10, '📋 Активные квесты', {
@@ -157,8 +168,24 @@ export class UIScene extends Phaser.Scene {
       color: '#6c5ce7',
     })
 
-    this.questPanel.add([background, title])
+    const closeHint = this.add.text(boxWidth / 2 - 80, -boxHeight / 2 + 12, '[Q] Закрыть', {
+      fontSize: '12px',
+      color: '#a29bfe',
+    })
+
+    this.questPanel.add([background, title, closeHint])
     this.questPanel.setName('questPanel')
+    this.questPanel.setVisible(false)
+    this.questPanel.setDepth(150)
+  }
+
+  private toggleQuestPanel() {
+    this.questPanelOpen = !this.questPanelOpen
+    this.questPanel.setVisible(this.questPanelOpen)
+
+    if (this.questPanelOpen) {
+      this.updateQuestPanel()
+    }
   }
 
   private updateQuestPanel() {
@@ -187,6 +214,88 @@ export class UIScene extends Phaser.Scene {
       emptyText.setName('quest-item-empty')
       this.questPanel.add(emptyText)
     }
+  }
+
+  private createMinimap() {
+    const minimapWidth = 200
+    const minimapHeight = 100
+    const x = 10 + minimapWidth / 2
+    const y = 720 - minimapHeight / 2 - 10
+
+    this.minimap = this.add.container(x, y)
+
+    const background = this.add.graphics()
+    background.fillStyle(0x1a1a2e, 0.7)
+    background.fillRoundedRect(-minimapWidth / 2, -minimapHeight / 2, minimapWidth, minimapHeight, 6)
+    background.lineStyle(1, 0x4a4a6a)
+    background.strokeRoundedRect(-minimapWidth / 2, -minimapHeight / 2, minimapWidth, minimapHeight, 6)
+
+    const currentLocation = this.locationManager.getCurrentLocationData()
+    this.minimapLocationText = this.add.text(0, -35, currentLocation.name, {
+      fontSize: '11px',
+      fontStyle: 'bold',
+      color: '#a29bfe',
+    })
+    this.minimapLocationText.setOrigin(0.5)
+
+    this.drawMinimapLocations()
+
+    this.minimap.add([background, this.minimapLocationText])
+    this.minimap.setName('minimap')
+  }
+
+  private drawMinimapLocations() {
+    const existingLocations = this.minimap.getAll().filter((item) => item.name && item.name.startsWith('minimap-loc'))
+    existingLocations.forEach((item) => item.destroy())
+
+    const locations: LocationId[] = ['open-space', 'kitchen', 'meeting-room', 'director-office']
+    const currentLocationId = this.locationManager.getCurrentLocation()
+    const visitedLocations = this.locationManager.getVisitedLocations()
+
+    const positions: Record<LocationId, { x: number; y: number }> = {
+      'open-space': { x: -50, y: 20 },
+      'kitchen': { x: 50, y: 20 },
+      'meeting-room': { x: -50, y: -15 },
+      'director-office': { x: 50, y: -15 },
+    }
+
+    locations.forEach((locId) => {
+      const pos = positions[locId]
+      const isVisited = visitedLocations.includes(locId)
+      const isCurrent = locId === currentLocationId
+
+      const locGraphics = this.add.graphics()
+      const size = 18
+
+      if (isCurrent) {
+        locGraphics.fillStyle(0x6c5ce7)
+      } else if (isVisited) {
+        locGraphics.fillStyle(0x4a4a6a)
+      } else {
+        locGraphics.fillStyle(0x2d2d44)
+      }
+      locGraphics.fillRoundedRect(pos.x - size / 2, pos.y - size / 2, size, size, 4)
+
+      if (isCurrent) {
+        locGraphics.lineStyle(2, 0xa29bfe)
+        locGraphics.strokeRoundedRect(pos.x - size / 2 - 2, pos.y - size / 2 - 2, size + 4, size + 4, 4)
+      }
+
+      const label = this.add.text(pos.x, pos.y, locId === 'open-space' ? 'OS' : locId === 'kitchen' ? 'K' : locId === 'meeting-room' ? 'П' : 'Д', {
+        fontSize: '9px',
+        color: isCurrent ? '#ffffff' : '#a29bfe',
+      })
+      label.setOrigin(0.5)
+      label.setName(`minimap-loc-${locId}`)
+
+      this.minimap.add([locGraphics, label])
+    })
+  }
+
+  private updateMinimap() {
+    const currentLocation = this.locationManager.getCurrentLocationData()
+    this.minimapLocationText.setText(currentLocation.name)
+    this.drawMinimapLocations()
   }
 
   private createInventoryBox() {
@@ -346,6 +455,7 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('itemAdded', this.onItemAdded, this)
     this.game.events.on('questStarted', this.onQuestStarted, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
+    this.game.events.on('locationChanged', this.onLocationChanged, this)
   }
 
   private onQuestStarted() {
@@ -354,6 +464,10 @@ export class UIScene extends Phaser.Scene {
 
   private onQuestCompleted() {
     this.updateQuestPanel()
+  }
+
+  private onLocationChanged() {
+    this.updateMinimap()
   }
 
   private onItemAdded() {
@@ -413,6 +527,7 @@ export class UIScene extends Phaser.Scene {
       this.gameState.reset()
       this.inventory.clear()
       this.questManager.clear()
+      this.locationManager.reset()
       this.scene.restart()
       this.scene.start('GameScene')
     })

@@ -95,3 +95,5 @@ export interface GameState {
   npcs: Record<string, NPCState>
   flags: Record<string, boolean>
 }
+
+export * from './Location'
