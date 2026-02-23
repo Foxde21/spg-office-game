@@ -1,10 +1,12 @@
 import Phaser from 'phaser'
-import type { Dialogue, DialogueChoice, ItemData } from '../types'
+import type { Dialogue, DialogueChoice, ItemData, AIContext } from '../types'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
 import { SaveManager } from '../managers/Save'
-import { CAREER_LEVELS, COLORS } from '../config'
+import { AIDialogueManager } from '../managers/AIDialogue'
+import { LocationManager } from '../managers/LocationManager'
+import { CAREER_LEVELS, COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config'
 
 export class UIScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container
@@ -13,10 +15,12 @@ export class UIScene extends Phaser.Scene {
   private choicesContainer!: Phaser.GameObjects.Container
   private currentDialogue: Dialogue | null = null
   private currentLineIndex = 0
+  private aiDialogueData: { npcId: string; name: string } | null = null
   private gameState!: GameStateManager
   private inventory!: InventoryManager
   private questManager!: QuestManager
   private saveManager!: SaveManager
+  private aiManager!: AIDialogueManager
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -29,6 +33,27 @@ export class UIScene extends Phaser.Scene {
   private saveKey!: Phaser.Input.Keyboard.Key
 
   private questPanel!: Phaser.GameObjects.Container
+  private locationManager!: LocationManager
+  private minimapGraphics!: Phaser.GameObjects.Graphics
+  private locationNameText!: Phaser.GameObjects.Text
+  private minimapLabels: Map<string, Phaser.GameObjects.Text> = new Map()
+
+  private readonly HUD_Y = GAME_HEIGHT - 95
+  private readonly HUD_H = 95
+  private readonly SECTION_W = 420
+
+  private isAIMode = false
+  private aiConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  private inputField!: Phaser.GameObjects.DOMElement
+  private isAITyping = false
+  private dialogueHint!: Phaser.GameObjects.Text
+  private dialogueAdvanceKey!: Phaser.Input.Keyboard.Key
+  private dialogueEscapeKey!: Phaser.Input.Keyboard.Key
+  private dialogueUpKey!: Phaser.Input.Keyboard.Key
+  private dialogueDownKey!: Phaser.Input.Keyboard.Key
+  private dialogueEnterKey!: Phaser.Input.Keyboard.Key
+  private selectedChoiceIndex = 0
+  private currentChoices: DialogueChoice[] = []
 
   constructor() {
     super({ key: 'UIScene' })
@@ -39,11 +64,15 @@ export class UIScene extends Phaser.Scene {
     this.inventory = InventoryManager.getInstance(this.game)
     this.questManager = QuestManager.getInstance(this.game)
     this.saveManager = SaveManager.getInstance(this.game)
-    
+    this.locationManager = LocationManager.getInstance(this.game)
+    this.aiManager = AIDialogueManager.getInstance()
+
+    this.createHUDBackground()
     this.createStatusBar()
+    this.createMinimap()
+    this.createQuestPanel()
     this.createDialogueBox()
     this.createInventoryBox()
-    this.createQuestPanel()
     this.setupEventListeners()
     this.setupInput()
   }
@@ -66,12 +95,13 @@ export class UIScene extends Phaser.Scene {
   }
 
   private showSaveMessage(text: string) {
-    const msg = this.add.text(640, 50, text, {
-      fontSize: '16px',
+    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, text, {
+      fontSize: '15px',
       color: '#00b894',
-      backgroundColor: '#000000aa',
-      padding: { x: 10, y: 5 },
+      backgroundColor: '#0a0a18cc',
+      padding: { x: 12, y: 6 },
     })
+    msg.setDepth(300)
     msg.setOrigin(0.5)
     
     this.time.delayedCall(2000, () => {
@@ -79,50 +109,173 @@ export class UIScene extends Phaser.Scene {
     })
   }
 
-  private createStatusBar() {
-    const container = this.add.container(20, 20)
-
+  private createHUDBackground() {
     const bg = this.add.graphics()
-    bg.fillStyle(0x1a1a2e, 0.9)
-    bg.fillRoundedRect(0, 0, 350, 80, 8)
+    bg.fillStyle(0x0a0a18, 0.96)
+    bg.fillRect(0, this.HUD_Y, GAME_WIDTH, this.HUD_H)
+    bg.lineStyle(1, 0x4a4a6a, 0.8)
+    bg.lineBetween(0, this.HUD_Y, GAME_WIDTH, this.HUD_Y)
+
+    const divider1X = this.SECTION_W + 10
+    const divider2X = GAME_WIDTH - this.SECTION_W - 10
+    bg.lineStyle(1, 0x3a3a5a, 0.6)
+    bg.lineBetween(divider1X, this.HUD_Y + 8, divider1X, GAME_HEIGHT - 8)
+    bg.lineBetween(divider2X, this.HUD_Y + 8, divider2X, GAME_HEIGHT - 8)
+
+    bg.setDepth(50)
+  }
+
+  private createStatusBar() {
+    const x = 10
+    const y = this.HUD_Y + 6
 
     const careerLevel = this.gameState.getCareerLevel()
     const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
-    
-    this.statusText = this.add.text(10, 10, `Уровень: ${levelData?.title || 'Junior'}`, {
-      fontSize: '14px',
-      color: '#ffffff',
-    })
 
-    const stressLabel = this.add.text(10, 32, 'Стресс:', {
-      fontSize: '12px',
-      color: '#ffffff',
+    const badge = this.add.graphics()
+    badge.fillStyle(COLORS.primary, 0.3)
+    badge.fillRoundedRect(x, y, this.SECTION_W - 5, 22, 4)
+    badge.lineStyle(1, COLORS.primary, 0.6)
+    badge.strokeRoundedRect(x, y, this.SECTION_W - 5, 22, 4)
+    badge.setDepth(51)
+
+    this.statusText = this.add.text(x + 10, y + 4, `⭐  ${levelData?.title || 'Junior Developer'}`, {
+      fontSize: '13px',
+      color: '#a29bfe',
+      fontStyle: 'bold',
     })
+    this.statusText.setDepth(52)
+
+    const stressLabel = this.add.text(x + 6, y + 30, 'СТРЕСС', {
+      fontSize: '10px',
+      color: '#fdcb6e',
+      fontStyle: 'bold',
+    })
+    stressLabel.setDepth(52)
 
     this.stressBar = this.add.graphics()
-    this.drawBar(this.stressBar, 80, 32, 200, 16, 0, COLORS.danger)
+    this.stressBar.setDepth(52)
+    this.drawBar(this.stressBar, x + 68, y + 30, this.SECTION_W - 80, 14, 0, COLORS.danger)
 
-    const respectLabel = this.add.text(10, 54, 'Уважение:', {
-      fontSize: '12px',
-      color: '#ffffff',
+    this.stressWarning = this.add.text(x + this.SECTION_W - 8, y + 30, '', {
+      fontSize: '14px',
     })
+    this.stressWarning.setOrigin(1, 0)
+    this.stressWarning.setDepth(52)
+
+    const respectLabel = this.add.text(x + 6, y + 52, 'УВАЖЕНИЕ', {
+      fontSize: '10px',
+      color: '#00b894',
+      fontStyle: 'bold',
+    })
+    respectLabel.setDepth(52)
 
     this.respectBar = this.add.graphics()
-    this.drawBar(this.respectBar, 80, 54, 200, 16, 0, COLORS.success)
+    this.respectBar.setDepth(52)
+    this.drawBar(this.respectBar, x + 68, y + 52, this.SECTION_W - 80, 14, 0, COLORS.success)
 
-    this.stressWarning = this.add.text(300, 40, '', {
-      fontSize: '20px',
+    const inventoryHint = this.add.text(x + 6, y + 74, '[I] Инвентарь   [F5] Сохранить', {
+      fontSize: '10px',
+      color: '#555577',
     })
-    this.stressWarning.setOrigin(0.5)
-
-    const inventoryHint = this.add.text(360, 30, '[I] Инвентарь', {
-      fontSize: '12px',
-      color: '#a29bfe',
-    })
-
-    container.add([bg, this.statusText, stressLabel, this.stressBar, respectLabel, this.respectBar, this.stressWarning, inventoryHint])
+    inventoryHint.setDepth(52)
 
     this.updateBars()
+  }
+
+  private readonly MINIMAP_LOCATIONS = [
+    { id: 'open-space', label: 'Опен Спейс', icon: '🏢', col: 0, row: 0 },
+    { id: 'kitchen', label: 'Кухня', icon: '☕', col: 1, row: 0 },
+    { id: 'meeting-room', label: 'Переговорка', icon: '🤝', col: 0, row: 1 },
+    { id: 'director-office', label: 'Директор', icon: '👔', col: 1, row: 1 },
+  ]
+
+  private createMinimap() {
+    const centerX = GAME_WIDTH / 2
+    const y = this.HUD_Y + 4
+
+    const title = this.add.text(centerX, y + 2, '🏢  ОФИС', {
+      fontSize: '11px',
+      color: '#6c5ce7',
+      fontStyle: 'bold',
+    })
+    title.setOrigin(0.5, 0)
+    title.setDepth(52)
+
+    this.minimapGraphics = this.add.graphics()
+    this.minimapGraphics.setDepth(51)
+
+    const boxW = 115
+    const boxH = 22
+    const gapX = 12
+    const gapY = 8
+    const totalW = boxW * 2 + gapX
+    const startX = centerX - totalW / 2
+    const boxStartY = y + 20
+
+    this.MINIMAP_LOCATIONS.forEach((loc) => {
+      const bx = startX + loc.col * (boxW + gapX)
+      const by = boxStartY + loc.row * (boxH + gapY)
+      const label = this.add.text(bx + boxW / 2, by + boxH / 2, `${loc.icon} ${loc.label}`, {
+        fontSize: '10px',
+        color: '#666688',
+      })
+      label.setOrigin(0.5, 0.5)
+      label.setDepth(53)
+      this.minimapLabels.set(loc.id, label)
+    })
+
+    this.locationNameText = this.add.text(centerX, y + 74, '', {
+      fontSize: '10px',
+      color: '#a29bfe',
+    })
+    this.locationNameText.setOrigin(0.5, 0)
+    this.locationNameText.setDepth(52)
+
+    this.drawMinimap()
+  }
+
+  private drawMinimap() {
+    this.minimapGraphics.clear()
+
+    const centerX = GAME_WIDTH / 2
+    const y = this.HUD_Y + 24
+    const currentLocation = this.locationManager.getCurrentLocation()
+
+    const boxW = 115
+    const boxH = 22
+    const gapX = 12
+    const gapY = 8
+    const totalW = boxW * 2 + gapX
+    const startX = centerX - totalW / 2
+
+    this.MINIMAP_LOCATIONS.forEach((loc) => {
+      const bx = startX + loc.col * (boxW + gapX)
+      const by = y + loc.row * (boxH + gapY)
+      const isActive = loc.id === currentLocation
+
+      if (isActive) {
+        this.minimapGraphics.fillStyle(COLORS.primary, 0.85)
+        this.minimapGraphics.fillRoundedRect(bx, by, boxW, boxH, 4)
+        this.minimapGraphics.lineStyle(1, 0xa29bfe, 1)
+        this.minimapGraphics.strokeRoundedRect(bx, by, boxW, boxH, 4)
+      } else {
+        this.minimapGraphics.fillStyle(0x1e1e32, 0.9)
+        this.minimapGraphics.fillRoundedRect(bx, by, boxW, boxH, 4)
+        this.minimapGraphics.lineStyle(1, 0x3a3a5a, 0.5)
+        this.minimapGraphics.strokeRoundedRect(bx, by, boxW, boxH, 4)
+      }
+
+      const label = this.minimapLabels.get(loc.id)
+      if (label) {
+        label.setColor(isActive ? '#ffffff' : '#555577')
+      }
+    })
+
+    const currentLoc = this.MINIMAP_LOCATIONS.find((l) => l.id === currentLocation)
+    if (currentLoc && this.locationNameText) {
+      this.locationNameText.setText(`📍 ${currentLoc.label}`)
+    }
   }
 
   private drawBar(
@@ -149,10 +302,13 @@ export class UIScene extends Phaser.Scene {
   private updateBars() {
     const stress = this.gameState.getStress()
     const respect = this.gameState.getRespect()
+    const x = 10
+    const y = this.HUD_Y + 6
+    const barW = this.SECTION_W - 80
 
     const stressColor = stress > 70 ? COLORS.danger : stress > 40 ? COLORS.warning : COLORS.success
-    this.drawBar(this.stressBar, 80, 32, 200, 16, stress, stressColor)
-    this.drawBar(this.respectBar, 80, 54, 200, 16, respect, COLORS.success)
+    this.drawBar(this.stressBar, x + 68, y + 30, barW, 14, stress, stressColor)
+    this.drawBar(this.respectBar, x + 68, y + 52, barW, 14, respect, COLORS.success)
 
     if (stress > 70) {
       this.stressWarning.setText('⚠️')
@@ -164,31 +320,25 @@ export class UIScene extends Phaser.Scene {
 
     const careerLevel = this.gameState.getCareerLevel()
     const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
-    this.statusText.setText(`Уровень: ${levelData?.title || 'Junior'}`)
+    this.statusText.setText(`⭐  ${levelData?.title || 'Junior Developer'}`)
   }
 
   private createQuestPanel() {
-    const boxWidth = 250
-    const boxHeight = 200
-    const x = 1280 - boxWidth / 2 - 20
-    const y = 150 + boxHeight / 2
+    const x = GAME_WIDTH - this.SECTION_W - 5
+    const y = this.HUD_Y + 4
 
     this.questPanel = this.add.container(x, y)
+    this.questPanel.setDepth(51)
+    this.questPanel.setName('questPanel')
 
-    const background = this.add.graphics()
-    background.fillStyle(0x1a1a2e, 0.9)
-    background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
-    background.lineStyle(1, 0x4a4a6a)
-    background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
-
-    const title = this.add.text(-boxWidth / 2 + 15, -boxHeight / 2 + 10, '📋 Активные квесты', {
-      fontSize: '14px',
-      fontStyle: 'bold',
+    const title = this.add.text(10, 4, '📋  КВЕСТЫ', {
+      fontSize: '11px',
       color: '#6c5ce7',
+      fontStyle: 'bold',
     })
 
-    this.questPanel.add([background, title])
-    this.questPanel.setName('questPanel')
+    this.questPanel.add([title])
+    this.updateQuestPanel()
   }
 
   private updateQuestPanel() {
@@ -196,24 +346,22 @@ export class UIScene extends Phaser.Scene {
     existingItems.forEach((item) => item.destroy())
 
     const quests = this.questManager.getActiveQuests()
-    const startY = -70
 
-    quests.slice(0, 4).forEach((quest, index) => {
-      const questText = this.add.text(-100, startY + index * 35, `• ${quest.title}`, {
-        fontSize: '12px',
-        color: '#ffffff',
-        wordWrap: { width: 200 },
+    quests.slice(0, 3).forEach((quest, index) => {
+      const questText = this.add.text(10, 22 + index * 22, `▸ ${quest.title}`, {
+        fontSize: '11px',
+        color: '#a29bfe',
+        wordWrap: { width: this.SECTION_W - 20 },
       })
       questText.setName(`quest-item-${quest.id}`)
       this.questPanel.add(questText)
     })
 
     if (quests.length === 0) {
-      const emptyText = this.add.text(0, 0, 'Нет активных квестов', {
-        fontSize: '12px',
-        color: '#666666',
+      const emptyText = this.add.text(10, 24, 'Нет активных квестов', {
+        fontSize: '11px',
+        color: '#3a3a5a',
       })
-      emptyText.setOrigin(0.5)
       emptyText.setName('quest-item-empty')
       this.questPanel.add(emptyText)
     }
@@ -376,6 +524,7 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('itemAdded', this.onItemAdded, this)
     this.game.events.on('questStarted', this.onQuestStarted, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
+    this.game.events.on('locationChanged', this.onLocationChanged, this)
   }
 
   private onQuestStarted() {
@@ -384,6 +533,10 @@ export class UIScene extends Phaser.Scene {
 
   private onQuestCompleted() {
     this.updateQuestPanel()
+  }
+
+  private onLocationChanged() {
+    this.drawMinimap()
   }
 
   private onItemAdded() {
@@ -449,47 +602,99 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createDialogueBox() {
-    const boxWidth = 800
-    const boxHeight = 200
-    const x = 1280 / 2
-    const y = 720 - boxHeight / 2 - 20
+    const boxWidth = 820
+    const boxHeight = 240
+    const x = GAME_WIDTH / 2
+    const y = this.HUD_Y - boxHeight / 2 - 10
 
     this.dialogueBox = this.add.container(x, y)
 
     const background = this.add.graphics()
-    background.fillStyle(0x2d2d44, 0.95)
-    background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
+    background.fillStyle(0x1a1a2e, 0.97)
+    background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
     background.lineStyle(2, 0x6c5ce7)
-    background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
+    background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
 
-    this.speakerText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 15, '', {
-      fontSize: '18px',
-      fontStyle: 'bold',
-      color: '#6c5ce7',
-    })
+    const topLine = this.add.graphics()
+    topLine.lineStyle(1, 0x4a4a6a, 0.5)
+    topLine.lineBetween(-boxWidth / 2 + 12, -boxHeight / 2 + 40, boxWidth / 2 - 12, -boxHeight / 2 + 40)
 
-    this.dialogueText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 50, '', {
+    this.speakerText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 12, '', {
       fontSize: '16px',
-      color: '#ffffff',
-      wordWrap: { width: boxWidth - 40 },
+      fontStyle: 'bold',
+      color: '#a29bfe',
     })
 
-    this.choicesContainer = this.add.container(0, 50)
+    this.dialogueText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 52, '', {
+      fontSize: '15px',
+      color: '#e0e0f0',
+      wordWrap: { width: boxWidth - 48 },
+    })
 
-    this.dialogueBox.add([background, this.speakerText, this.dialogueText, this.choicesContainer])
+    this.choicesContainer = this.add.container(-boxWidth / 2 + 20, -boxHeight / 2 + 140)
+
+    const inputHtml = `
+      <input type="text" id="ai-input" placeholder="Введите сообщение..." 
+        style="width: 720px; padding: 10px; background: #0d0d1a; border: 1px solid #6c5ce7; 
+        border-radius: 5px; color: white; font-size: 14px; outline: none;">
+    `
+    this.inputField = this.add.dom(0, 70).createFromHTML(inputHtml)
+    this.inputField.setVisible(false)
+
+    this.dialogueHint = this.add.text(boxWidth / 2 - 16, boxHeight / 2 - 10, '[ПРОБЕЛ] Далее  [ESC] Закрыть', {
+      fontSize: '11px',
+      color: '#444466',
+    })
+    this.dialogueHint.setOrigin(1, 1)
+
+    this.dialogueBox.add([background, topLine, this.speakerText, this.dialogueText, this.choicesContainer, this.inputField, this.dialogueHint])
     this.dialogueBox.setVisible(false)
     this.dialogueBox.setDepth(200)
+
+    this.dialogueAdvanceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
+    this.dialogueEscapeKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.dialogueUpKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP)
+    this.dialogueDownKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN)
+    this.dialogueEnterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER)
   }
 
-  private startDialogue(dialogue: Dialogue) {
-    this.currentDialogue = dialogue
-    this.currentLineIndex = 0
-    this.dialogueBox.setVisible(true)
-    this.showCurrentLine()
+  private startDialogue(data: Dialogue | { npcId: string; name: string; isAI: true }) {
+    if ('isAI' in data && data.isAI) {
+      this.isAIMode = true
+      this.aiDialogueData = { npcId: data.npcId, name: data.name }
+      this.currentDialogue = null
+      this.aiConversationHistory = []
+      this.speakerText.setText(data.name)
+      this.dialogueText.setText('Привет! Чем могу помочь?')
+      this.choicesContainer.removeAll(true)
+      this.inputField.setVisible(true)
+      this.dialogueHint.setText('[ESC] Закрыть')
+      this.dialogueBox.setVisible(true)
+      this.setupAIInput()
+    } else {
+      this.isAIMode = false
+      this.aiDialogueData = null
+      this.currentDialogue = data as Dialogue
+      this.currentLineIndex = 0
+      this.inputField.setVisible(false)
+      this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
+      this.dialogueBox.setVisible(true)
+      this.showCurrentLine()
+    }
+
+    this.dialogueAdvanceKey.on('down', this.onDialogueAdvance, this)
+    this.dialogueEscapeKey.on('down', this.endDialogue, this)
+  }
+
+  private onDialogueAdvance() {
+    if (this.isAIMode) return
+    if (this.currentChoices.length === 0) {
+      this.nextLine()
+    }
   }
 
   private showCurrentLine() {
-    if (!this.currentDialogue) return
+    if (!this.currentDialogue || this.isAIMode) return
 
     const line = this.currentDialogue.lines[this.currentLineIndex]
     if (!line) {
@@ -503,36 +708,82 @@ export class UIScene extends Phaser.Scene {
 
     if (line.choices && line.choices.length > 0) {
       this.showChoices(line.choices)
+      this.dialogueHint.setText('[ESC] Закрыть')
+    } else {
+      this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
     }
   }
 
   private showChoices(choices: DialogueChoice[]) {
     const validChoices = choices.filter((choice) => this.checkChoiceCondition(choice))
+    this.currentChoices = validChoices
+    this.selectedChoiceIndex = 0
+    this.renderChoices()
 
-    validChoices.forEach((choice, index) => {
-      const choiceText = this.add.text(-350, index * 35, `▸ ${choice.text}`, {
+    this.dialogueUpKey.on('down', this.onChoiceUp, this)
+    this.dialogueDownKey.on('down', this.onChoiceDown, this)
+    this.dialogueEnterKey.on('down', this.onChoiceConfirm, this)
+  }
+
+  private renderChoices() {
+    this.choicesContainer.removeAll(true)
+
+    this.currentChoices.forEach((choice, index) => {
+      const isSelected = index === this.selectedChoiceIndex
+      const rowBg = this.add.graphics()
+
+      if (isSelected) {
+        rowBg.fillStyle(0x6c5ce7, 0.25)
+        rowBg.fillRoundedRect(-4, index * 34 - 2, 760, 28, 4)
+        rowBg.lineStyle(1, 0x6c5ce7, 0.5)
+        rowBg.strokeRoundedRect(-4, index * 34 - 2, 760, 28, 4)
+      }
+
+      const choiceText = this.add.text(16, index * 34 + 6, `${isSelected ? '▶' : '▸'}  ${choice.text}`, {
         fontSize: '14px',
-        color: '#a29bfe',
-        backgroundColor: '#1a1a2e',
-        padding: { x: 10, y: 5 },
+        color: isSelected ? '#ffffff' : '#8888bb',
       })
 
       choiceText.setInteractive({ useHandCursor: true })
 
       choiceText.on('pointerover', () => {
-        choiceText.setColor('#ffffff')
-      })
-
-      choiceText.on('pointerout', () => {
-        choiceText.setColor('#a29bfe')
+        this.selectedChoiceIndex = index
+        this.renderChoices()
       })
 
       choiceText.on('pointerdown', () => {
-        this.handleChoice(choice)
+        this.confirmChoiceSelection()
       })
 
-      this.choicesContainer.add(choiceText)
+      this.choicesContainer.add([rowBg, choiceText])
     })
+  }
+
+  private onChoiceUp() {
+    if (this.currentChoices.length === 0) return
+    this.selectedChoiceIndex = (this.selectedChoiceIndex - 1 + this.currentChoices.length) % this.currentChoices.length
+    this.renderChoices()
+  }
+
+  private onChoiceDown() {
+    if (this.currentChoices.length === 0) return
+    this.selectedChoiceIndex = (this.selectedChoiceIndex + 1) % this.currentChoices.length
+    this.renderChoices()
+  }
+
+  private onChoiceConfirm() {
+    if (this.currentChoices.length === 0) return
+    this.confirmChoiceSelection()
+  }
+
+  private confirmChoiceSelection() {
+    const choice = this.currentChoices[this.selectedChoiceIndex]
+    if (!choice) return
+    this.currentChoices = []
+    this.dialogueUpKey.off('down', this.onChoiceUp, this)
+    this.dialogueDownKey.off('down', this.onChoiceDown, this)
+    this.dialogueEnterKey.off('down', this.onChoiceConfirm, this)
+    this.handleChoice(choice)
   }
 
   private checkChoiceCondition(choice: DialogueChoice): boolean {
@@ -613,8 +864,79 @@ export class UIScene extends Phaser.Scene {
   }
 
   private endDialogue() {
+    this.dialogueAdvanceKey.off('down', this.onDialogueAdvance, this)
+    this.dialogueEscapeKey.off('down', this.endDialogue, this)
+    this.dialogueUpKey.off('down', this.onChoiceUp, this)
+    this.dialogueDownKey.off('down', this.onChoiceDown, this)
+    this.dialogueEnterKey.off('down', this.onChoiceConfirm, this)
+
+    this.currentChoices = []
     this.dialogueBox.setVisible(false)
     this.currentDialogue = null
+    this.aiDialogueData = null
+    this.isAIMode = false
+    this.aiConversationHistory = []
+    this.inputField.setVisible(false)
     this.scene.get('GameScene').scene.resume()
+  }
+
+  private setupAIInput() {
+    const input = document.getElementById('ai-input') as HTMLInputElement
+    if (!input) return
+
+    input.value = ''
+    input.focus()
+
+    input.onkeydown = async (e) => {
+      if (e.key === 'Enter' && !this.isAITyping) {
+        const message = input.value.trim()
+        if (message) {
+          input.value = ''
+          await this.sendAIMessage(message)
+        }
+      }
+    }
+  }
+
+  private async sendAIMessage(message: string) {
+    if (this.isAITyping || !this.aiDialogueData) return
+    
+    this.isAITyping = true
+    this.dialogueText.setText('...')
+    
+    this.aiConversationHistory.push({ role: 'user', content: message })
+
+    const npcState = this.gameState.getNPCState(this.aiDialogueData.npcId)
+
+    const context: AIContext = {
+      playerName: 'Игрок',
+      careerLevel: this.gameState.getCareerLevel(),
+      stress: this.gameState.getStress(),
+      respect: this.gameState.getRespect(),
+      npcId: this.aiDialogueData.npcId,
+      relationship: npcState?.relationship || 0,
+      conversationHistory: this.aiConversationHistory,
+      previousTopics: npcState?.seenDialogues || []
+    }
+
+    try {
+      const response = await this.aiManager.generateResponse(message, context)
+      
+      this.dialogueText.setText(response.text)
+      this.aiConversationHistory.push({ role: 'assistant', content: response.text })
+
+      if (response.stressChange) {
+        this.gameState.addStress(response.stressChange)
+      }
+      if (response.respectChange) {
+        this.gameState.addRespect(response.respectChange)
+      }
+    } catch (error) {
+      console.error('AI error:', error)
+      this.dialogueText.setText('Извини, не расслышал. Можешь повторить?')
+    }
+
+    this.isAITyping = false
+    this.setupAIInput()
   }
 }

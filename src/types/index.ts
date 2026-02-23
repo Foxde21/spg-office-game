@@ -108,3 +108,6 @@ export interface SaveData {
   npcs: Record<string, NPCState>
   flags: Record<string, boolean>
 }
+
+export * from './ai'
+export * from './Location'
