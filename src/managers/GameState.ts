@@ -29,6 +29,8 @@ export class GameStateManager {
         inventory: [],
         completedQuests: [],
         currentQuests: [],
+        x: 200,
+        y: 400,
       },
       npcs: {},
       flags: {},
@@ -127,5 +129,14 @@ export class GameStateManager {
 
   reset(): void {
     this.state = this.createInitialState()
+  }
+
+  setPlayerPosition(x: number, y: number): void {
+    this.state.player.x = x
+    this.state.player.y = y
+  }
+
+  getPlayerPosition(): { x: number; y: number } {
+    return { x: this.state.player.x || 200, y: this.state.player.y || 400 }
   }
 }
