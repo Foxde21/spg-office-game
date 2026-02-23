@@ -42,8 +42,8 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
         name: 'Тим Лид',
         role: 'Senior Developer',
         sprite: 'timlead',
-        x: 560,
-        y: 320,
+        x: 532,
+        y: 304,
         dialogues: [
           {
             id: 'intro',
@@ -316,4 +316,4 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
 }
 
 export const STARTING_LOCATION: LocationId = 'open-space'
-export const STARTING_POSITION = { x: 200, y: 400 }
+export const STARTING_POSITION = { x: 469, y: 560 }

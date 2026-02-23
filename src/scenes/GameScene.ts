@@ -43,9 +43,10 @@ export class GameScene extends Phaser.Scene {
     this.setupCamera()
 
     this.scene.launch('UIScene')
-    
+
     this.loadSavedGame()
-    
+    this.ensurePlayerNotStuckInDecor()
+
     this.saveManager.startAutoSave()
     
     this.game.events.on('locationChanged', this.onLocationChanged, this)
@@ -63,13 +64,34 @@ export class GameScene extends Phaser.Scene {
     this.saveManager.save()
   }
 
+  private ensurePlayerNotStuckInDecor() {
+    const location = this.locationManager.getCurrentLocationData()
+    if (location.id === 'open-space') {
+      this.player.setPosition(STARTING_POSITION.x, STARTING_POSITION.y)
+      this.gameState.setPlayerPosition(STARTING_POSITION.x, STARTING_POSITION.y)
+      return
+    }
+    if (this.decorColliders.getLength() > 0 && this.physics.overlap(this.player, this.decorColliders)) {
+      this.player.setPosition(STARTING_POSITION.x, STARTING_POSITION.y)
+      this.gameState.setPlayerPosition(STARTING_POSITION.x, STARTING_POSITION.y)
+    }
+  }
+
   private loadSavedGame() {
     if (this.saveManager.hasSave()) {
       const saveData = this.saveManager.load()
       if (saveData && saveData.player) {
         const pos = this.gameState.getPlayerPosition()
+        const bounds = this.locationManager.getCurrentLocationData()
+        const inBounds = pos.x >= 0 && pos.x <= bounds.width && pos.y >= 0 && pos.y <= bounds.height
         this.player.setPosition(pos.x, pos.y)
-        
+        let useDefault = !inBounds
+        if (inBounds && this.physics.overlap(this.player, this.decorColliders)) useDefault = true
+        if (useDefault) {
+          this.player.setPosition(STARTING_POSITION.x, STARTING_POSITION.y)
+          this.gameState.setPlayerPosition(STARTING_POSITION.x, STARTING_POSITION.y)
+        }
+
         const inventoryItemIds = saveData.inventory.map(item => item.id)
         this.items = this.items.filter(item => {
           const itemData = item.getItemData()
@@ -139,12 +161,22 @@ export class GameScene extends Phaser.Scene {
     this.decorGraphics = this.add.graphics()
 
     if (location.id === 'open-space') {
-      const S = 2
-      const addSolid = (x: number, y: number, frame: string, w: number, h: number, scale: number) => {
+      const S_PART_DESK = 3
+      const S_COMP = 2
+      const COLLISION_SHRINK_Y = 20
+      const addSolid = (x: number, y: number, frame: string, w: number, h: number, scale: number, flipY = false, flipX = false) => {
         const img = this.add.image(x, y, 'pixeloffice', frame)
         img.setDisplaySize(w * scale, h * scale)
+        if (flipY) img.setFlipY(true)
+        if (flipX) img.setFlipX(true)
         img.setDepth(2)
         this.physics.add.existing(img, true)
+        const body = (img.body as Phaser.Physics.Arcade.StaticBody)
+        const dw = img.displayWidth
+        const dh = img.displayHeight
+        const newH = Math.max(dh - COLLISION_SHRINK_Y, 8)
+        body.setSize(dw, newH)
+        body.setOffset(0, (dh - newH) / 2)
         this.decorColliders.add(img)
       }
 
@@ -155,7 +187,7 @@ export class GameScene extends Phaser.Scene {
       const compW = 20
       const compH = 22
       const passage = 90
-      const partDisplayW = partW * S
+      const partDisplayW = partW * S_PART_DESK
       const totalPartRow = 3 * partDisplayW + 2 * passage
       const centerStartX = (1280 - totalPartRow) / 2 + partDisplayW / 2
       const colX = [
@@ -164,17 +196,27 @@ export class GameScene extends Phaser.Scene {
         centerStartX + (partDisplayW + passage) * 2,
       ]
 
-      const partRowY: number[] = [210, 310, 410]
-      const deskRowY: number[] = [260, 360]
+      const partRowY: number[] = [210, 302, 394]
+      const deskRowY: number[] = [235, 327, 419]
+      const computerOffsetX = -36
+      const computerOffsetY: number[] = [6, 6, 6]
 
       partRowY.forEach((y) => {
-        colX.forEach((x) => addSolid(x, y, 'partition', partW, partH, S))
+        colX.forEach((x) => addSolid(x, y, 'partition', partW, partH, S_PART_DESK))
       })
 
-      deskRowY.forEach((y) => {
+      deskRowY.forEach((y, rowIndex) => {
         colX.forEach((x) => {
-          addSolid(x, y, 'desk_pair', deskPairW, deskPairH, S)
-          addSolid(x, y - 8, 'computer', compW, compH, S)
+          addSolid(x, y, 'desk_pair', deskPairW, deskPairH, S_PART_DESK, true)
+          addSolid(x + computerOffsetX, y + computerOffsetY[rowIndex], 'computer', compW, compH, S_COMP)
+        })
+      })
+
+      const rightDeskOffsetY = 5
+      const rightDeskOffsetX = 28
+      deskRowY.forEach((rowY) => {
+        colX.forEach((x) => {
+          addSolid(x + rightDeskOffsetX, rowY + rightDeskOffsetY, 'computer2', compW, compH, S_COMP, false, true)
         })
       })
     } else if (location.id === 'kitchen') {
