@@ -7,6 +7,7 @@ import { GameStateManager } from './managers/GameState'
 import { InventoryManager } from './managers/Inventory'
 import { QuestManager } from './managers/Quest'
 import { LocationManager } from './managers/LocationManager'
+import { SaveManager } from './managers/Save'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -33,3 +34,4 @@ GameStateManager.getInstance(game)
 InventoryManager.getInstance(game)
 QuestManager.getInstance(game)
 LocationManager.getInstance(game)
+SaveManager.getInstance(game)

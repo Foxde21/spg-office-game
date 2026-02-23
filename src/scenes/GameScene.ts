@@ -5,8 +5,10 @@ import { Item } from '../objects/Item'
 import { Door } from '../objects/Door'
 import { InventoryManager } from '../managers/Inventory'
 import { LocationManager } from '../managers/LocationManager'
+import { SaveManager } from '../managers/Save'
+import { GameStateManager } from '../managers/GameState'
 import { STARTING_POSITION } from '../data/locations'
-import type { LocationData } from '../types/Location'
+import type { LocationData, ItemData } from '../types'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
@@ -19,6 +21,8 @@ export class GameScene extends Phaser.Scene {
   private interactKey!: Phaser.Input.Keyboard.Key
   private inventory!: InventoryManager
   private locationManager!: LocationManager
+  private saveManager!: SaveManager
+  private gameState!: GameStateManager
 
   constructor() {
     super({ key: 'GameScene' })
@@ -27,19 +31,57 @@ export class GameScene extends Phaser.Scene {
   create() {
     this.inventory = InventoryManager.getInstance(this.game)
     this.locationManager = LocationManager.getInstance(this.game)
-
+    this.saveManager = SaveManager.getInstance(this.game)
+    this.gameState = GameStateManager.getInstance(this.game)
+    
     this.createPlayer()
     this.loadLocation(this.locationManager.getCurrentLocationData())
     this.setupInput()
     this.setupCamera()
 
     this.scene.launch('UIScene')
-
+    
+    this.loadSavedGame()
+    
+    this.saveManager.startAutoSave()
+    
     this.game.events.on('locationChanged', this.onLocationChanged, this)
+    this.game.events.on('questCompleted', this.onQuestCompleted, this)
+    this.game.events.on('itemAdded', this.onItemAdded, this)
+  }
+
+  private onQuestCompleted() {
+    this.gameState.setPlayerPosition(this.player.x, this.player.y)
+    this.saveManager.save()
+  }
+
+  private onItemAdded() {
+    this.gameState.setPlayerPosition(this.player.x, this.player.y)
+    this.saveManager.save()
+  }
+
+  private loadSavedGame() {
+    if (this.saveManager.hasSave()) {
+      const saveData = this.saveManager.load()
+      if (saveData && saveData.player) {
+        const pos = this.gameState.getPlayerPosition()
+        this.player.setPosition(pos.x, pos.y)
+        
+        const inventoryItemIds = saveData.inventory.map(item => item.id)
+        this.items = this.items.filter(item => {
+          const itemData = item.getItemData()
+          if (inventoryItemIds.includes(itemData.id)) {
+            item.destroy()
+            return false
+          }
+          return true
+        })
+      }
+    }
   }
 
   private createPlayer() {
-    this.player = new Player(this, STARTING_POSITION.x, STARTING_POSITION.y, 'player')
+    this.player = new Player(this, STARTING_POSITION.x, STARTING_POSITION.y)
     this.add.existing(this.player)
     this.player.setDepth(10)
   }
@@ -138,11 +180,12 @@ export class GameScene extends Phaser.Scene {
 
   private createNPCs(location: LocationData) {
     location.npcs.forEach((npcData) => {
+      const animKey = npcData.sprite.replace('npc-', '').replace('-', '')
       const npc = new NPC(
         this,
         npcData.x,
         npcData.y,
-        npcData.sprite,
+        animKey,
         npcData.name,
         npcData.role,
         npcData.dialogues
@@ -154,7 +197,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createItems(location: LocationData) {
-    location.items.forEach((itemSpawn) => {
+    location.items.forEach((itemSpawn: { x: number; y: number; data: ItemData }) => {
       const item = new Item(this, itemSpawn.x, itemSpawn.y, itemSpawn.data.sprite, itemSpawn.data)
       item.setDepth(10)
       this.items.push(item)

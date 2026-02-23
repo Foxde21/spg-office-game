@@ -82,6 +82,8 @@ export interface PlayerData {
   inventory: string[]
   completedQuests: string[]
   currentQuests: string[]
+  x?: number
+  y?: number
 }
 
 export interface NPCState {
@@ -92,6 +94,17 @@ export interface NPCState {
 
 export interface GameState {
   player: PlayerData
+  npcs: Record<string, NPCState>
+  flags: Record<string, boolean>
+}
+
+export interface SaveData {
+  version: string
+  timestamp: number
+  player: PlayerData
+  inventory: ItemData[]
+  activeQuests: QuestData[]
+  completedQuests: string[]
   npcs: Record<string, NPCState>
   flags: Record<string, boolean>
 }
