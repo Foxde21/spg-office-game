@@ -159,6 +159,14 @@ this.game.events.off('questCompleted', this.handleQuest, this)
 
 ## Git Workflow
 
+### Branches
+
+- **main** — release branch (protected, only PRs from dev)
+- **dev** — development branch (protected, PRs from features)
+- **feature/\*** — feature branches
+
+**NEVER commit directly to main or dev!**
+
 ### Branch Naming
 
 Each task must be done in a separate branch:
@@ -183,13 +191,15 @@ refactor/004-player-movement
 ### Workflow
 
 1. Pick a task from `backlog/todo/`
-2. Create branch: `git checkout -b feature/001-quest-system`
+2. Create branch from dev: `git checkout dev && git pull && git checkout -b feature/001-quest-system`
 3. Move task to `backlog/in-progress/`
 4. Implement, test, verify DOD
 5. Commit: `git commit -m "feat(quests): add quest system"`
 6. Push: `git push -u origin feature/001-quest-system`
-7. Create PR or merge to main
-8. Move task to `backlog/done/`
+7. Create PR to dev branch
+8. After review, merge to dev
+9. When ready for release: PR from dev to main
+10. Move task to `backlog/done/`
 
 ### Commit Messages
 
