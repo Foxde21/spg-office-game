@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene'
 import { PreloadScene } from './scenes/PreloadScene'
 import { GameScene } from './scenes/GameScene'
 import { UIScene } from './scenes/UIScene'
+import { GameStateManager } from './managers/GameState'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -24,4 +25,5 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 }
 
-new Phaser.Game(config)
+const game = new Phaser.Game(config)
+GameStateManager.getInstance(game)

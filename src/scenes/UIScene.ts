@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
-import { Dialogue } from '../types'
+import type { Dialogue, DialogueChoice } from '../types'
+import { GameStateManager } from '../managers/GameState'
+import { CAREER_LEVELS, COLORS } from '../config'
 
 export class UIScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container
@@ -8,24 +10,154 @@ export class UIScene extends Phaser.Scene {
   private choicesContainer!: Phaser.GameObjects.Container
   private currentDialogue: Dialogue | null = null
   private currentLineIndex = 0
+  private gameState!: GameStateManager
+
+  private stressBar!: Phaser.GameObjects.Graphics
+  private respectBar!: Phaser.GameObjects.Graphics
+  private statusText!: Phaser.GameObjects.Text
+  private stressWarning!: Phaser.GameObjects.Text
 
   constructor() {
     super({ key: 'UIScene' })
   }
 
   create() {
+    this.gameState = GameStateManager.getInstance(this.game)
+    
+    this.createStatusBar()
     this.createDialogueBox()
-    this.createUI()
-
-    this.game.events.on('startDialogue', this.startDialogue, this)
+    this.setupEventListeners()
   }
 
-  private createUI() {
-    this.add.text(20, 20, 'Уровень: Junior | Стресс: 0% | Уважение: 0', {
-      fontSize: '16px',
+  private createStatusBar() {
+    const container = this.add.container(20, 20)
+
+    const bg = this.add.graphics()
+    bg.fillStyle(0x1a1a2e, 0.9)
+    bg.fillRoundedRect(0, 0, 350, 80, 8)
+
+    const careerLevel = this.gameState.getCareerLevel()
+    const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
+    
+    this.statusText = this.add.text(10, 10, `Уровень: ${levelData?.title || 'Junior'}`, {
+      fontSize: '14px',
       color: '#ffffff',
-      backgroundColor: '#000000',
-      padding: { x: 10, y: 5 },
+    })
+
+    const stressLabel = this.add.text(10, 32, 'Стресс:', {
+      fontSize: '12px',
+      color: '#ffffff',
+    })
+
+    this.stressBar = this.add.graphics()
+    this.drawBar(this.stressBar, 80, 32, 200, 16, 0, COLORS.danger)
+
+    const respectLabel = this.add.text(10, 54, 'Уважение:', {
+      fontSize: '12px',
+      color: '#ffffff',
+    })
+
+    this.respectBar = this.add.graphics()
+    this.drawBar(this.respectBar, 80, 54, 200, 16, 0, COLORS.success)
+
+    this.stressWarning = this.add.text(300, 40, '', {
+      fontSize: '20px',
+    })
+    this.stressWarning.setOrigin(0.5)
+
+    container.add([bg, this.statusText, stressLabel, this.stressBar, respectLabel, this.respectBar, this.stressWarning])
+
+    this.updateBars()
+  }
+
+  private drawBar(
+    graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    value: number,
+    color: number
+  ) {
+    graphics.clear()
+
+    graphics.fillStyle(0x2d2d44)
+    graphics.fillRoundedRect(x, y, width, height, 4)
+
+    const fillWidth = (width * Math.min(100, Math.max(0, value))) / 100
+    if (fillWidth > 0) {
+      graphics.fillStyle(color)
+      graphics.fillRoundedRect(x, y, fillWidth, height, 4)
+    }
+  }
+
+  private updateBars() {
+    const stress = this.gameState.getStress()
+    const respect = this.gameState.getRespect()
+
+    const stressColor = stress > 70 ? COLORS.danger : stress > 40 ? COLORS.warning : COLORS.success
+    this.drawBar(this.stressBar, 80, 32, 200, 16, stress, stressColor)
+    this.drawBar(this.respectBar, 80, 54, 200, 16, respect, COLORS.success)
+
+    if (stress > 70) {
+      this.stressWarning.setText('⚠️')
+    } else if (stress > 50) {
+      this.stressWarning.setText('😰')
+    } else {
+      this.stressWarning.setText('')
+    }
+
+    const careerLevel = this.gameState.getCareerLevel()
+    const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
+    this.statusText.setText(`Уровень: ${levelData?.title || 'Junior'}`)
+  }
+
+  private setupEventListeners() {
+    this.game.events.on('startDialogue', this.startDialogue, this)
+    this.game.events.on('stressChanged', this.onStressChanged, this)
+    this.game.events.on('respectChanged', this.onRespectChanged, this)
+    this.game.events.on('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.on('gameOver', this.onGameOver, this)
+  }
+
+  private onStressChanged() {
+    this.updateBars()
+  }
+
+  private onRespectChanged() {
+    this.updateBars()
+  }
+
+  private onCareerLevelUp() {
+    this.updateBars()
+  }
+
+  private onGameOver(data: { reason: string }) {
+    this.scene.pause('GameScene')
+    
+    const overlay = this.add.graphics()
+    overlay.fillStyle(0x000000, 0.8)
+    overlay.fillRect(0, 0, 1280, 720)
+
+    const reasonText = data.reason === 'burnout' 
+      ? 'Вы выгорели и уволились...' 
+      : 'Game Over'
+
+    this.add.text(640, 340, reasonText, {
+      fontSize: '32px',
+      color: '#e17055',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+
+    this.add.text(640, 400, 'Нажмите R для перезапуска', {
+      fontSize: '18px',
+      color: '#ffffff',
+    }).setOrigin(0.5)
+
+    this.input.keyboard!.once('keydown-R', () => {
+      this.gameState.reset()
+      this.scene.restart()
+      this.scene.start('GameScene')
     })
   }
 
@@ -86,7 +218,7 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  private showChoices(choices: Array<{ text: string; nextDialogue?: string }>) {
+  private showChoices(choices: DialogueChoice[]) {
     choices.forEach((choice, index) => {
       const choiceText = this.add.text(-350, index * 35, `▸ ${choice.text}`, {
         fontSize: '14px',
@@ -113,7 +245,14 @@ export class UIScene extends Phaser.Scene {
     })
   }
 
-  private handleChoice(choice: { text: string; nextDialogue?: string }) {
+  private handleChoice(choice: DialogueChoice) {
+    if (choice.stressChange) {
+      this.gameState.addStress(choice.stressChange)
+    }
+    if (choice.respectChange) {
+      this.gameState.addRespect(choice.respectChange)
+    }
+
     if (choice.nextDialogue && this.currentDialogue) {
       this.currentDialogue = this.findDialogue(choice.nextDialogue)
       this.currentLineIndex = 0
@@ -128,7 +267,7 @@ export class UIScene extends Phaser.Scene {
     this.showCurrentLine()
   }
 
-  private findDialogue(id: string): Dialogue | null {
+  private findDialogue(_id: string): Dialogue | null {
     return null
   }
 

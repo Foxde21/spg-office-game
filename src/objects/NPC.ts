@@ -1,8 +1,8 @@
 import Phaser from 'phaser'
-import { Dialogue } from '../types'
+import type { Dialogue } from '../types'
 
 export class NPC extends Phaser.Physics.Arcade.Sprite {
-  private name: string
+  private npcName: string
   private role: string
   private dialogues: Dialogue[]
 
@@ -17,7 +17,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
   ) {
     super(scene, x, y, texture)
     
-    this.name = name
+    this.npcName = name
     this.role = role
     this.dialogues = dialogues
     
@@ -28,7 +28,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
   }
 
   private createNameLabel(scene: Phaser.Scene) {
-    const label = scene.add.text(this.x, this.y - 50, this.name, {
+    const label = scene.add.text(this.x, this.y - 50, this.npcName, {
       fontSize: '14px',
       color: '#ffffff',
       backgroundColor: '#000000aa',
@@ -42,7 +42,7 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
   }
 
   getName(): string {
-    return this.name
+    return this.npcName
   }
 
   getRole(): string {
