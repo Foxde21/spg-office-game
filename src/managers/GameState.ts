@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { GameState, PlayerData } from '../types'
+import type { GameState, PlayerData, NPCState } from '../types'
 import { CAREER_LEVELS, type CareerLevel } from '../config'
 
 export class GameStateManager {
@@ -138,5 +138,33 @@ export class GameStateManager {
 
   getPlayerPosition(): { x: number; y: number } {
     return { x: this.state.player.x || 200, y: this.state.player.y || 400 }
+  }
+
+  getNPCState(npcId: string): NPCState | undefined {
+    return this.state.npcs[npcId]
+  }
+
+  setNPCRelationship(npcId: string, relationship: number): void {
+    if (!this.state.npcs[npcId]) {
+      this.state.npcs[npcId] = {
+        id: npcId,
+        relationship: 0,
+        seenDialogues: []
+      }
+    }
+    this.state.npcs[npcId].relationship = Math.min(100, Math.max(-100, relationship))
+  }
+
+  addNPCSeenDialogue(npcId: string, dialogueId: string): void {
+    if (!this.state.npcs[npcId]) {
+      this.state.npcs[npcId] = {
+        id: npcId,
+        relationship: 0,
+        seenDialogues: []
+      }
+    }
+    if (!this.state.npcs[npcId].seenDialogues.includes(dialogueId)) {
+      this.state.npcs[npcId].seenDialogues.push(dialogueId)
+    }
   }
 }

@@ -160,138 +160,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createNPCs() {
-    const timLead = new NPC(
-      this,
-      600,
-      300,
-      'npc',
-      'Тим Лид',
-      'Senior Developer',
-      [
-        {
-          id: 'intro',
-          lines: [
-            {
-              speaker: 'Тим Лид',
-              text: 'Привет, новенький! Добро пожаловать в команду.',
-            },
-            {
-              speaker: 'Тим Лид',
-              text: 'Твоя первая задача — найди документацию по проекту. Она где-то на кухне.',
-              choices: [
-                { text: 'Понял, иду искать!', nextDialogue: 'accepted', startQuest: 'find-documentation', respectChange: 5 },
-                { text: 'А можно поподробнее?', nextDialogue: 'details', stressChange: -5 },
-              ],
-            },
-          ],
-        },
-        {
-          id: 'accepted',
-          lines: [
-            {
-              speaker: 'Тим Лид',
-              text: 'Отлично! Удачи. И не забудь выпить кофе — он бесплатный.',
-            },
-          ],
-        },
-        {
-          id: 'details',
-          lines: [
-            {
-              speaker: 'Тим Лид',
-              text: 'Документация лежит на столе на кухне. Бывает, что её прячут в холодильник.',
-            },
-            {
-              speaker: 'Тим Лид',
-              text: 'Так что ищи тщательно. Удачи!',
-              choices: [
-                { text: 'Понял, начинаю поиск!', startQuest: 'find-documentation', respectChange: 3 },
-              ],
-            },
-          ],
-        },
-        {
-          id: 'has-documentation',
-          lines: [
-            {
-              speaker: 'Тим Лид',
-              text: 'Ты нашёл документацию? Отличная работа!',
-            },
-            {
-              speaker: 'Тим Лид',
-              text: 'Это важный первый шаг. Продолжай в том же духе!',
-            },
-          ],
-        },
-      ]
-    )
+    const npcConfigs = [
+      { id: 'tim-lead', x: 600, y: 300, name: 'Тим Лид', role: 'Team Lead' },
+      { id: 'anna-hr', x: 900, y: 400, name: 'Анна HR', role: 'HR Manager' },
+      { id: 'petya-senior', x: 400, y: 500, name: 'Петя Сеньор', role: 'Senior Developer' },
+      { id: 'olga-product', x: 1100, y: 300, name: 'Ольга Продакт', role: 'Product Manager' },
+      { id: 'lesha-designer', x: 300, y: 250, name: 'Лёша Дизайнер', role: 'UI/UX Designer' },
+      { id: 'masha-qa', x: 800, y: 550, name: 'Маша QA', role: 'QA Engineer' },
+      { id: 'igor-analyst', x: 500, y: 600, name: 'Игорь Аналитик', role: 'Business Analyst' },
+      { id: 'director', x: 1200, y: 500, name: 'Директор', role: 'CEO' },
+    ]
 
-    const hrManager = new NPC(
-      this,
-      900,
-      400,
-      'npc',
-      'Анна HR',
-      'HR Manager',
-      [
-        {
-          id: 'hr-intro',
-          lines: [
-            {
-              speaker: 'Анна HR',
-              text: 'Привет! Я Анна, HR-менеджер. Если будут вопросы по отпуску — обращайся.',
-            },
-            {
-              speaker: 'Анна HR',
-              text: 'Как ты себя чувствуешь? Не слишком много стресса?',
-              choices: [
-                { text: 'Всё отлично, спасибо!', nextDialogue: 'hr-good', respectChange: 5 },
-                { text: 'Если честно, немного устал...', nextDialogue: 'hr-tired', stressChange: -10 },
-                { text: 'Я в порядке (ложь)', nextDialogue: 'hr-lie', stressChange: 10 },
-              ],
-            },
-          ],
-        },
-        {
-          id: 'hr-good',
-          lines: [
-            {
-              speaker: 'Анна HR',
-              text: 'Отлично! Продолжай в том же духе! 🌟',
-            },
-          ],
-        },
-        {
-          id: 'hr-tired',
-          lines: [
-            {
-              speaker: 'Анна HR',
-              text: 'Понимаю. Не забывай делать перерывы и пить кофе.',
-            },
-            {
-              speaker: 'Анна HR',
-              text: 'Можешь взять отгул, если нужно. Береги себя!',
-            },
-          ],
-        },
-        {
-          id: 'hr-lie',
-          lines: [
-            {
-              speaker: 'Анна HR',
-              text: 'Хм... Ладно, но если что — приходи.',
-            },
-            {
-              speaker: 'Анна HR',
-              text: '(Про себя) Надо будет присмотреть за ним...',
-            },
-          ],
-        },
-      ]
-    )
-
-    this.npcs.push(timLead, hrManager)
-    this.npcs.forEach((npc) => this.add.existing(npc))
+    npcConfigs.forEach(config => {
+      const npc = new NPC(
+        this,
+        config.x,
+        config.y,
+        'npc',
+        config.id,
+        config.name,
+        config.role,
+        [],
+        true
+      )
+      this.npcs.push(npc)
+      this.add.existing(npc)
+    })
   }
 
   private setupInput() {

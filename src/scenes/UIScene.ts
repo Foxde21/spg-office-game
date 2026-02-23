@@ -1,9 +1,10 @@
 import Phaser from 'phaser'
-import type { Dialogue, DialogueChoice, ItemData } from '../types'
+import type { Dialogue, DialogueChoice, ItemData, AIContext } from '../types'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
 import { SaveManager } from '../managers/Save'
+import { AIDialogueManager } from '../managers/AIDialogue'
 import { CAREER_LEVELS, COLORS } from '../config'
 
 export class UIScene extends Phaser.Scene {
@@ -13,10 +14,12 @@ export class UIScene extends Phaser.Scene {
   private choicesContainer!: Phaser.GameObjects.Container
   private currentDialogue: Dialogue | null = null
   private currentLineIndex = 0
+  private aiDialogueData: { npcId: string; name: string } | null = null
   private gameState!: GameStateManager
   private inventory!: InventoryManager
   private questManager!: QuestManager
   private saveManager!: SaveManager
+  private aiManager!: AIDialogueManager
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -30,6 +33,11 @@ export class UIScene extends Phaser.Scene {
 
   private questPanel!: Phaser.GameObjects.Container
 
+  private isAIMode = false
+  private aiConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  private inputField!: Phaser.GameObjects.DOMElement
+  private isAITyping = false
+
   constructor() {
     super({ key: 'UIScene' })
   }
@@ -39,6 +47,7 @@ export class UIScene extends Phaser.Scene {
     this.inventory = InventoryManager.getInstance(this.game)
     this.questManager = QuestManager.getInstance(this.game)
     this.saveManager = SaveManager.getInstance(this.game)
+    this.aiManager = AIDialogueManager.getInstance()
     
     this.createStatusBar()
     this.createDialogueBox()
@@ -476,20 +485,44 @@ export class UIScene extends Phaser.Scene {
 
     this.choicesContainer = this.add.container(0, 50)
 
-    this.dialogueBox.add([background, this.speakerText, this.dialogueText, this.choicesContainer])
+    const inputHtml = `
+      <input type="text" id="ai-input" placeholder="Введите сообщение..." 
+        style="width: 700px; padding: 10px; background: #1a1a2e; border: 1px solid #6c5ce7; 
+        border-radius: 5px; color: white; font-size: 14px; outline: none;">
+    `
+    this.inputField = this.add.dom(0, 60).createFromHTML(inputHtml)
+    this.inputField.setVisible(false)
+
+    this.dialogueBox.add([background, this.speakerText, this.dialogueText, this.choicesContainer, this.inputField])
     this.dialogueBox.setVisible(false)
     this.dialogueBox.setDepth(200)
   }
 
-  private startDialogue(dialogue: Dialogue) {
-    this.currentDialogue = dialogue
-    this.currentLineIndex = 0
-    this.dialogueBox.setVisible(true)
-    this.showCurrentLine()
+  private startDialogue(data: Dialogue | { npcId: string; name: string; isAI: true }) {
+    if ('isAI' in data && data.isAI) {
+      this.isAIMode = true
+      this.aiDialogueData = { npcId: data.npcId, name: data.name }
+      this.currentDialogue = null
+      this.aiConversationHistory = []
+      this.speakerText.setText(data.name)
+      this.dialogueText.setText('Привет! Чем могу помочь?')
+      this.choicesContainer.removeAll(true)
+      this.inputField.setVisible(true)
+      this.dialogueBox.setVisible(true)
+      this.setupAIInput()
+    } else {
+      this.isAIMode = false
+      this.aiDialogueData = null
+      this.currentDialogue = data as Dialogue
+      this.currentLineIndex = 0
+      this.inputField.setVisible(false)
+      this.dialogueBox.setVisible(true)
+      this.showCurrentLine()
+    }
   }
 
   private showCurrentLine() {
-    if (!this.currentDialogue) return
+    if (!this.currentDialogue || this.isAIMode) return
 
     const line = this.currentDialogue.lines[this.currentLineIndex]
     if (!line) {
@@ -615,6 +648,70 @@ export class UIScene extends Phaser.Scene {
   private endDialogue() {
     this.dialogueBox.setVisible(false)
     this.currentDialogue = null
+    this.aiDialogueData = null
+    this.isAIMode = false
+    this.aiConversationHistory = []
+    this.inputField.setVisible(false)
     this.scene.get('GameScene').scene.resume()
+  }
+
+  private setupAIInput() {
+    const input = document.getElementById('ai-input') as HTMLInputElement
+    if (!input) return
+
+    input.value = ''
+    input.focus()
+
+    input.onkeydown = async (e) => {
+      if (e.key === 'Enter' && !this.isAITyping) {
+        const message = input.value.trim()
+        if (message) {
+          input.value = ''
+          await this.sendAIMessage(message)
+        }
+      }
+    }
+  }
+
+  private async sendAIMessage(message: string) {
+    if (this.isAITyping || !this.aiDialogueData) return
+    
+    this.isAITyping = true
+    this.dialogueText.setText('...')
+    
+    this.aiConversationHistory.push({ role: 'user', content: message })
+
+    const npcState = this.gameState.getNPCState(this.aiDialogueData.npcId)
+
+    const context: AIContext = {
+      playerName: 'Игрок',
+      careerLevel: this.gameState.getCareerLevel(),
+      stress: this.gameState.getStress(),
+      respect: this.gameState.getRespect(),
+      npcId: this.aiDialogueData.npcId,
+      relationship: npcState?.relationship || 0,
+      conversationHistory: this.aiConversationHistory,
+      previousTopics: npcState?.seenDialogues || []
+    }
+
+    try {
+      const response = await this.aiManager.generateResponse(message, context)
+      
+      this.dialogueText.setText(response.text)
+      this.aiConversationHistory.push({ role: 'assistant', content: response.text })
+
+      if (response.stressChange) {
+        this.gameState.addStress(response.stressChange)
+      }
+      if (response.respectChange) {
+        this.gameState.addRespect(response.respectChange)
+      }
+    } catch (error) {
+      console.error('AI error:', error)
+      this.dialogueText.setText('Извини, не расслышал. Можешь повторить?')
+    }
+
+    this.isAITyping = false
+    this.setupAIInput()
   }
 }
