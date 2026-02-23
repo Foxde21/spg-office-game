@@ -11,16 +11,23 @@
 1. Создаем тикет по шаблону `TEMPLATE.md`
 2. Заполняем DOR — проверяем готовность
 3. Перемещаем в `todo/`
-4. **Создаем ветку:** `git checkout -b feature/<ticket-id>-<description>`
+4. **Создаем ветку от dev:** `git checkout dev && git pull && git checkout -b feature/<ticket-id>-<description>`
 5. Берем в работу → перемещаем в `in-progress/`
 6. Выполняем все пункты DOD
-7. Коммитим в ветку (НЕ в main!)
-8. Push + PR
-9. Перемещаем в `done/`
+7. Коммитим в ветку (НЕ в main/dev!)
+8. Push + PR в dev
+9. После ревью мержим в dev
+10. Перемещаем в `done/`
+11. Релиз: PR из dev в main
 
 ## Git Branches
 
-**Каждая задача — в отдельной ветке!**
+**Структура веток:**
+- `main` — релизы (защищен)
+- `dev` — разработка (защищен)
+- `feature/*` — фичи
+
+**Каждая задача — в отдельной ветке от dev!**
 
 ```
 feature/001-quest-system
@@ -29,7 +36,7 @@ bugfix/003-dialogue-fix
 refactor/004-player-movement
 ```
 
-**Запрещено коммитить напрямую в main!**
+**Запрещено коммитить напрямую в main и dev!**
 
 ## Приоритеты
 
