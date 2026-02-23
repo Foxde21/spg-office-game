@@ -17,6 +17,7 @@ export class GameScene extends Phaser.Scene {
   private items: Item[] = []
   private doors: Door[] = []
   private backgroundTiles: Phaser.GameObjects.Sprite[] = []
+  private decorColliders!: Phaser.Physics.Arcade.StaticGroup
   private decorGraphics: Phaser.GameObjects.Graphics | null = null
   private interactKey!: Phaser.Input.Keyboard.Key
   private inventory!: InventoryManager
@@ -34,8 +35,10 @@ export class GameScene extends Phaser.Scene {
     this.saveManager = SaveManager.getInstance(this.game)
     this.gameState = GameStateManager.getInstance(this.game)
     
+    this.decorColliders = this.physics.add.staticGroup()
     this.createPlayer()
     this.loadLocation(this.locationManager.getCurrentLocationData())
+    this.physics.add.collider(this.player, this.decorColliders)
     this.setupInput()
     this.setupCamera()
 
@@ -99,6 +102,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clearLocation() {
+    this.decorColliders.clear(true, true)
     this.npcs.forEach((npc) => npc.destroy())
     this.items.forEach((item) => item.destroy())
     this.doors.forEach((door) => door.destroy())
@@ -135,11 +139,44 @@ export class GameScene extends Phaser.Scene {
     this.decorGraphics = this.add.graphics()
 
     if (location.id === 'open-space') {
-      for (let i = 0; i < 5; i++) {
-        this.decorGraphics.fillStyle(0x8b7355)
-        this.decorGraphics.fillRect(150 + i * 150, 200, 100, 60)
-        this.decorGraphics.fillRect(150 + i * 150, 180, 100, 20)
+      const S = 2
+      const addSolid = (x: number, y: number, frame: string, w: number, h: number, scale: number) => {
+        const img = this.add.image(x, y, 'pixeloffice', frame)
+        img.setDisplaySize(w * scale, h * scale)
+        img.setDepth(2)
+        this.physics.add.existing(img, true)
+        this.decorColliders.add(img)
       }
+
+      const partW = 84
+      const partH = 20
+      const deskPairW = 44
+      const deskPairH = 30
+      const compW = 20
+      const compH = 22
+      const passage = 90
+      const partDisplayW = partW * S
+      const totalPartRow = 3 * partDisplayW + 2 * passage
+      const centerStartX = (1280 - totalPartRow) / 2 + partDisplayW / 2
+      const colX = [
+        centerStartX,
+        centerStartX + partDisplayW + passage,
+        centerStartX + (partDisplayW + passage) * 2,
+      ]
+
+      const partRowY: number[] = [210, 310, 410]
+      const deskRowY: number[] = [260, 360]
+
+      partRowY.forEach((y) => {
+        colX.forEach((x) => addSolid(x, y, 'partition', partW, partH, S))
+      })
+
+      deskRowY.forEach((y) => {
+        colX.forEach((x) => {
+          addSolid(x, y, 'desk_pair', deskPairW, deskPairH, S)
+          addSolid(x, y - 8, 'computer', compW, compH, S)
+        })
+      })
     } else if (location.id === 'kitchen') {
       this.decorGraphics.fillStyle(0x4a3728)
       this.decorGraphics.fillRect(500, 300, 120, 80)

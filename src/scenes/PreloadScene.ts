@@ -8,6 +8,8 @@ export class PreloadScene extends Phaser.Scene {
   preload() {
     this.createLoadingBar()
     this.load.atlas('villagers', 'assets/Villagers/VillagersSheetPNG.png', 'assets/Villagers/villagers-atlas.json')
+    // PixelOffice atlas (single-frame placeholder)
+    this.load.atlas('pixeloffice', 'assets/PixelOffice/PixelOfficeAssets.png', 'assets/PixelOffice/PixelOfficeAssetsAtlas.json')
   }
 
   private createLoadingBar() {

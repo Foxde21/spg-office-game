@@ -42,8 +42,8 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
         name: 'Тим Лид',
         role: 'Senior Developer',
         sprite: 'timlead',
-        x: 600,
-        y: 300,
+        x: 560,
+        y: 320,
         dialogues: [
           {
             id: 'intro',
