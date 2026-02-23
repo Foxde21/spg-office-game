@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
-import type { Dialogue, DialogueChoice } from '../types'
+import type { Dialogue, DialogueChoice, ItemData } from '../types'
 import { GameStateManager } from '../managers/GameState'
+import { InventoryManager } from '../managers/Inventory'
 import { CAREER_LEVELS, COLORS } from '../config'
 
 export class UIScene extends Phaser.Scene {
@@ -11,11 +12,16 @@ export class UIScene extends Phaser.Scene {
   private currentDialogue: Dialogue | null = null
   private currentLineIndex = 0
   private gameState!: GameStateManager
+  private inventory!: InventoryManager
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
   private statusText!: Phaser.GameObjects.Text
   private stressWarning!: Phaser.GameObjects.Text
+
+  private inventoryBox!: Phaser.GameObjects.Container
+  private inventoryOpen = false
+  private inventoryKey!: Phaser.Input.Keyboard.Key
 
   constructor() {
     super({ key: 'UIScene' })
@@ -23,10 +29,18 @@ export class UIScene extends Phaser.Scene {
 
   create() {
     this.gameState = GameStateManager.getInstance(this.game)
+    this.inventory = InventoryManager.getInstance(this.game)
     
     this.createStatusBar()
     this.createDialogueBox()
+    this.createInventoryBox()
     this.setupEventListeners()
+    this.setupInput()
+  }
+
+  private setupInput() {
+    this.inventoryKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I)
+    this.inventoryKey.on('down', this.toggleInventory, this)
   }
 
   private createStatusBar() {
@@ -65,7 +79,12 @@ export class UIScene extends Phaser.Scene {
     })
     this.stressWarning.setOrigin(0.5)
 
-    container.add([bg, this.statusText, stressLabel, this.stressBar, respectLabel, this.respectBar, this.stressWarning])
+    const inventoryHint = this.add.text(360, 30, '[I] Инвентарь', {
+      fontSize: '12px',
+      color: '#a29bfe',
+    })
+
+    container.add([bg, this.statusText, stressLabel, this.stressBar, respectLabel, this.respectBar, this.stressWarning, inventoryHint])
 
     this.updateBars()
   }
@@ -112,12 +131,167 @@ export class UIScene extends Phaser.Scene {
     this.statusText.setText(`Уровень: ${levelData?.title || 'Junior'}`)
   }
 
+  private createInventoryBox() {
+    const boxWidth = 400
+    const boxHeight = 350
+    const x = 1280 - boxWidth / 2 - 20
+    const y = 720 / 2
+
+    this.inventoryBox = this.add.container(x, y)
+
+    const background = this.add.graphics()
+    background.fillStyle(0x1a1a2e, 0.95)
+    background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
+    background.lineStyle(2, 0x6c5ce7)
+    background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 10)
+
+    const title = this.add.text(-boxWidth / 2 + 15, -boxHeight / 2 + 15, 'Инвентарь', {
+      fontSize: '18px',
+      fontStyle: 'bold',
+      color: '#6c5ce7',
+    })
+
+    const closeHint = this.add.text(boxWidth / 2 - 100, -boxHeight / 2 + 17, '[I] Закрыть', {
+      fontSize: '12px',
+      color: '#a29bfe',
+    })
+
+    this.inventoryBox.add([background, title, closeHint])
+    this.inventoryBox.setVisible(false)
+    this.inventoryBox.setDepth(100)
+  }
+
+  private toggleInventory() {
+    this.inventoryOpen = !this.inventoryOpen
+    this.inventoryBox.setVisible(this.inventoryOpen)
+
+    if (this.inventoryOpen) {
+      this.renderInventoryItems()
+      this.scene.pause('GameScene')
+    } else {
+      this.clearInventoryItems()
+      this.scene.resume('GameScene')
+    }
+  }
+
+  private renderInventoryItems() {
+    this.clearInventoryItems()
+
+    const items = this.inventory.getAllItems()
+    const startX = -170
+    const startY = -120
+    const slotSize = 64
+    const padding = 10
+    const cols = 4
+
+    items.forEach((item, index) => {
+      const col = index % cols
+      const row = Math.floor(index / cols)
+      const x = startX + col * (slotSize + padding)
+      const y = startY + row * (slotSize + padding)
+
+      this.createItemSlot(item, x, y)
+    })
+
+    if (items.length === 0) {
+      const emptyText = this.add.text(0, 0, 'Инвентарь пуст', {
+        fontSize: '16px',
+        color: '#666666',
+      })
+      emptyText.setOrigin(0.5)
+      emptyText.setName('inventory-empty')
+      this.inventoryBox.add(emptyText)
+    }
+  }
+
+  private createItemSlot(item: ItemData, x: number, y: number) {
+    const slot = this.add.container(x, y)
+    slot.setName(`slot-${item.id}`)
+
+    const bg = this.add.graphics()
+    bg.fillStyle(0x2d2d44)
+    bg.fillRoundedRect(0, 0, 64, 64, 6)
+    bg.lineStyle(1, 0x4a4a6a)
+    bg.strokeRoundedRect(0, 0, 64, 64, 6)
+
+    const itemColor = item.type === 'consumable' ? 0x00b894 : item.type === 'quest' ? 0xfdcb6e : 0x6c5ce7
+    const itemIcon = this.add.graphics()
+    itemIcon.fillStyle(itemColor)
+    itemIcon.fillRect(10, 10, 44, 44)
+
+    const nameLabel = this.add.text(32, 75, item.name, {
+      fontSize: '10px',
+      color: '#ffffff',
+    })
+    nameLabel.setOrigin(0.5)
+
+    slot.add([bg, itemIcon, nameLabel])
+
+    if (item.usable) {
+      slot.setInteractive({ useHandCursor: true })
+      
+      slot.on('pointerover', () => {
+        bg.clear()
+        bg.fillStyle(0x3d3d5c)
+        bg.fillRoundedRect(0, 0, 64, 64, 6)
+        bg.lineStyle(2, 0x6c5ce7)
+        bg.strokeRoundedRect(0, 0, 64, 64, 6)
+      })
+
+      slot.on('pointerout', () => {
+        bg.clear()
+        bg.fillStyle(0x2d2d44)
+        bg.fillRoundedRect(0, 0, 64, 64, 6)
+        bg.lineStyle(1, 0x4a4a6a)
+        bg.strokeRoundedRect(0, 0, 64, 64, 6)
+      })
+
+      slot.on('pointerdown', () => {
+        this.useItem(item)
+      })
+    }
+
+    this.inventoryBox.add(slot)
+  }
+
+  private useItem(item: ItemData) {
+    const usedItem = this.inventory.useItem(item.id)
+    if (!usedItem) return
+
+    if (usedItem.effects) {
+      if (usedItem.effects.stress) {
+        this.gameState.addStress(usedItem.effects.stress)
+      }
+      if (usedItem.effects.respect) {
+        this.gameState.addRespect(usedItem.effects.respect)
+      }
+    }
+
+    this.renderInventoryItems()
+  }
+
+  private clearInventoryItems() {
+    const items = this.inventoryBox.getAll()
+    items.forEach((item) => {
+      if (item.name && (item.name.startsWith('slot-') || item.name === 'inventory-empty')) {
+        item.destroy()
+      }
+    })
+  }
+
   private setupEventListeners() {
     this.game.events.on('startDialogue', this.startDialogue, this)
     this.game.events.on('stressChanged', this.onStressChanged, this)
     this.game.events.on('respectChanged', this.onRespectChanged, this)
     this.game.events.on('careerLevelUp', this.onCareerLevelUp, this)
     this.game.events.on('gameOver', this.onGameOver, this)
+    this.game.events.on('itemAdded', this.onItemAdded, this)
+  }
+
+  private onItemAdded() {
+    if (this.inventoryOpen) {
+      this.renderInventoryItems()
+    }
   }
 
   private onStressChanged() {
@@ -156,6 +330,7 @@ export class UIScene extends Phaser.Scene {
 
     this.input.keyboard!.once('keydown-R', () => {
       this.gameState.reset()
+      this.inventory.clear()
       this.scene.restart()
       this.scene.start('GameScene')
     })

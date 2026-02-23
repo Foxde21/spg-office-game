@@ -4,6 +4,7 @@ import { PreloadScene } from './scenes/PreloadScene'
 import { GameScene } from './scenes/GameScene'
 import { UIScene } from './scenes/UIScene'
 import { GameStateManager } from './managers/GameState'
+import { InventoryManager } from './managers/Inventory'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -27,3 +28,4 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config)
 GameStateManager.getInstance(game)
+InventoryManager.getInstance(game)

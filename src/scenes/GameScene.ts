@@ -1,21 +1,28 @@
 import Phaser from 'phaser'
 import { Player } from '../objects/Player'
 import { NPC } from '../objects/NPC'
+import { Item } from '../objects/Item'
 import { GAME_WIDTH, GAME_HEIGHT } from '../config'
+import { InventoryManager } from '../managers/Inventory'
+import type { ItemData } from '../types'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private npcs: NPC[] = []
+  private items: Item[] = []
   private interactKey!: Phaser.Input.Keyboard.Key
+  private inventory!: InventoryManager
 
   constructor() {
     super({ key: 'GameScene' })
   }
 
   create() {
+    this.inventory = InventoryManager.getInstance(this.game)
     this.createOffice()
     this.createPlayer()
+    this.createItems()
     this.createNPCs()
     this.setupInput()
     this.setupCamera()
@@ -53,6 +60,55 @@ export class GameScene extends Phaser.Scene {
     
     const coffeeLabel = this.add.text(740, 550, '☕', { fontSize: '32px' })
     coffeeLabel.setOrigin(0.5)
+  }
+
+  private createItems() {
+    const itemsData: Array<{ x: number; y: number; data: ItemData }> = [
+      {
+        x: 750,
+        y: 620,
+        data: {
+          id: 'coffee-cup',
+          name: 'Кофе',
+          description: 'Горячий кофе. Снижает стресс.',
+          sprite: 'item',
+          type: 'consumable',
+          usable: true,
+          effects: { stress: -15 },
+        },
+      },
+      {
+        x: 300,
+        y: 500,
+        data: {
+          id: 'documentation',
+          name: 'Документация',
+          description: 'Документация по проекту. Квестовый предмет.',
+          sprite: 'item',
+          type: 'quest',
+          usable: false,
+        },
+      },
+      {
+        x: 1200,
+        y: 300,
+        data: {
+          id: 'energy-drink',
+          name: 'Энергетик',
+          description: 'Бодрит! Но потом будет хуже...',
+          sprite: 'item',
+          type: 'consumable',
+          usable: true,
+          effects: { stress: -25 },
+        },
+      },
+    ]
+
+    itemsData.forEach(({ x, y, data }) => {
+      const item = new Item(this, x, y, data.sprite, data)
+      this.items.push(item)
+      this.add.existing(item)
+    })
   }
 
   private createPlayer() {
@@ -200,6 +256,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkInteraction() {
+    for (const item of this.items) {
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        item.x,
+        item.y
+      )
+
+      if (distance < 60) {
+        this.pickupItem(item)
+        return
+      }
+    }
+
     for (const npc of this.npcs) {
       const distance = Phaser.Math.Distance.Between(
         this.player.x,
@@ -210,8 +280,19 @@ export class GameScene extends Phaser.Scene {
 
       if (distance < 80) {
         this.startDialogue(npc)
-        break
+        return
       }
+    }
+  }
+
+  private pickupItem(item: Item) {
+    const itemData = item.getItemData()
+    const success = this.inventory.addItem(itemData)
+
+    if (success) {
+      const index = this.items.indexOf(item)
+      this.items.splice(index, 1)
+      item.destroy()
     }
   }
 
