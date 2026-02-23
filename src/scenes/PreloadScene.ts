@@ -7,7 +7,7 @@ export class PreloadScene extends Phaser.Scene {
 
   preload() {
     this.createLoadingBar()
-    this.load.atlas('villagers', 'assets/Villagers/VillagersSheetPNG.png', 'assets/Villagers/villagers.json')
+    this.load.atlas('villagers', 'assets/Villagers/VillagersSheetPNG.png', 'assets/Villagers/villagers-atlas.json')
   }
 
   private createLoadingBar() {
@@ -37,6 +37,10 @@ export class PreloadScene extends Phaser.Scene {
       progressBar.clear()
       progressBar.fillStyle(0x6c5ce7, 1)
       progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30)
+    })
+
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      console.error('Load error:', file.key, file.url)
     })
 
     this.load.on('complete', () => {

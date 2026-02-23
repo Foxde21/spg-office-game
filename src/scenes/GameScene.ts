@@ -182,7 +182,7 @@ export class GameScene extends Phaser.Scene {
     const aiNPCIds = ['tim-lead', 'anna-hr', 'petya-senior', 'olga-product', 'lesha-designer', 'masha-qa', 'igor-analyst', 'director']
     
     location.npcs.forEach((npcData) => {
-      const animKey = npcData.sprite.replace('npc-', '').replace('-', '')
+      const animKey = npcData.sprite
       const npcId = npcData.name.toLowerCase().replace(' ', '-').replace('ё', 'е')
       const isAI = aiNPCIds.includes(npcId)
       
@@ -300,7 +300,7 @@ export class GameScene extends Phaser.Scene {
 
   private startDialogue(npc: NPC) {
     this.scene.pause()
-    this.scene.get('UIScene').events.emit('startDialogue', npc.getDialogue())
+    this.game.events.emit('startDialogue', npc.getDialogue())
   }
 
   shutdown() {
