@@ -11,7 +11,9 @@ Theme: "Path from Junior to Team Lead without burning out."
 
 ```bash
 npm install           # Install dependencies
-npm run dev           # Start dev server (http://localhost:3000)
+npm run dev           # Start both client + AI server (client: :3000, server: :3001)
+npm run dev:client    # Start Vite dev server only (http://localhost:3000)
+npm run dev:server    # Start Express AI proxy server only (http://localhost:3001)
 npm run build         # TypeScript check + production build
 npm run preview       # Preview production build
 
@@ -23,6 +25,18 @@ npm run test:e2e      # Run E2E tests (Playwright)
 npm run test:e2e:ui   # Run E2E tests with UI
 npm run test:all      # Run all tests (unit + e2e)
 ```
+
+## Environment Setup
+
+Create `.env` file in project root:
+
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+CLIENT_URL=http://localhost:3000
+SERVER_PORT=3001
+```
+
+Get OpenRouter API key at https://openrouter.ai/keys
 
 ## Testing Strategy
 
@@ -53,7 +67,12 @@ src/
 ├── types/         # TypeScript interfaces
 ├── scenes/        # Phaser scenes (Boot, Preload, Game, UI)
 ├── objects/       # Game objects (Player, NPC, Items)
-└── managers/      # Singleton managers (future)
+├── managers/      # Singleton managers (GameState, Inventory, Quest, Save, AIDialogue)
+└── data/          # Game data (NPC prompts, items, quests)
+
+server/
+├── index.ts       # Express server entry point
+└── routes/        # API routes (ai.ts)
 ```
 
 ## Code Style
