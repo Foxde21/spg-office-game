@@ -10,6 +10,17 @@ export interface DialogueChoice {
   action?: string
   stressChange?: number
   respectChange?: number
+  giveItem?: string
+  takeItem?: string
+  startQuest?: string
+  completeQuest?: string
+  condition?: {
+    hasItem?: string
+    hasRespect?: number
+    hasStress?: number
+    hasQuest?: string
+    questCompleted?: string
+  }
 }
 
 export interface Dialogue {
@@ -25,21 +36,42 @@ export interface NPCData {
   dialogues: Dialogue[]
 }
 
+export type ItemType = 'consumable' | 'quest' | 'document'
+
 export interface ItemData {
   id: string
   name: string
   description: string
   sprite: string
+  type: ItemType
   usable: boolean
+  effects?: ItemEffects
 }
+
+export interface ItemEffects {
+  stress?: number
+  respect?: number
+}
+
+export type QuestType = 'main' | 'side' | 'daily'
 
 export interface QuestData {
   id: string
   title: string
   description: string
+  type: QuestType
   completed: boolean
+  progress: number
   requiredItems?: string[]
   requiredDialogues?: string[]
+  rewards?: {
+    respect?: number
+    stress?: number
+  }
+  penalties?: {
+    respect?: number
+    stress?: number
+  }
 }
 
 export interface PlayerData {
@@ -50,6 +82,8 @@ export interface PlayerData {
   inventory: string[]
   completedQuests: string[]
   currentQuests: string[]
+  x?: number
+  y?: number
 }
 
 export interface NPCState {
@@ -64,50 +98,13 @@ export interface GameState {
   flags: Record<string, boolean>
 }
 
-export interface DialogueChoice {
-  text: string
-  nextDialogue?: string
-  action?: string
-  stressChange?: number
-  respectChange?: number
-}
-
-export interface Dialogue {
-  id: string
-  lines: DialogueLine[]
-}
-
-export interface NPCData {
-  id: string
-  name: string
-  role: string
-  sprite: string
-  dialogues: Dialogue[]
-}
-
-export interface ItemData {
-  id: string
-  name: string
-  description: string
-  sprite: string
-  usable: boolean
-}
-
-export interface QuestData {
-  id: string
-  title: string
-  description: string
-  completed: boolean
-  requiredItems?: string[]
-  requiredDialogues?: string[]
-}
-
-export interface PlayerData {
-  name: string
-  careerLevel: string
-  stress: number
-  respect: number
-  inventory: string[]
+export interface SaveData {
+  version: string
+  timestamp: number
+  player: PlayerData
+  inventory: ItemData[]
+  activeQuests: QuestData[]
   completedQuests: string[]
-  currentQuests: string[]
+  npcs: Record<string, NPCState>
+  flags: Record<string, boolean>
 }

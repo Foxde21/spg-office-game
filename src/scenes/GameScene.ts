@@ -1,26 +1,76 @@
 import Phaser from 'phaser'
 import { Player } from '../objects/Player'
 import { NPC } from '../objects/NPC'
+import { Item } from '../objects/Item'
 import { GAME_WIDTH, GAME_HEIGHT } from '../config'
+import { InventoryManager } from '../managers/Inventory'
+import { SaveManager } from '../managers/Save'
+import { GameStateManager } from '../managers/GameState'
+import type { ItemData } from '../types'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private npcs: NPC[] = []
+  private items: Item[] = []
   private interactKey!: Phaser.Input.Keyboard.Key
+  private inventory!: InventoryManager
+  private saveManager!: SaveManager
+  private gameState!: GameStateManager
 
   constructor() {
     super({ key: 'GameScene' })
   }
 
   create() {
+    this.inventory = InventoryManager.getInstance(this.game)
+    this.saveManager = SaveManager.getInstance(this.game)
+    this.gameState = GameStateManager.getInstance(this.game)
     this.createOffice()
     this.createPlayer()
+    this.createItems()
     this.createNPCs()
     this.setupInput()
     this.setupCamera()
 
     this.scene.launch('UIScene')
+    
+    this.loadSavedGame()
+    
+    this.saveManager.startAutoSave()
+    
+    this.game.events.on('questCompleted', this.onQuestCompleted, this)
+    this.game.events.on('itemAdded', this.onItemAdded, this)
+  }
+
+  private onQuestCompleted() {
+    this.gameState.setPlayerPosition(this.player.x, this.player.y)
+    this.saveManager.save()
+  }
+
+  private onItemAdded() {
+    this.gameState.setPlayerPosition(this.player.x, this.player.y)
+    this.saveManager.save()
+  }
+
+  private loadSavedGame() {
+    if (this.saveManager.hasSave()) {
+      const saveData = this.saveManager.load()
+      if (saveData && saveData.player) {
+        const pos = this.gameState.getPlayerPosition()
+        this.player.setPosition(pos.x, pos.y)
+        
+        const inventoryItemIds = saveData.inventory.map(item => item.id)
+        this.items = this.items.filter(item => {
+          const itemData = item.getItemData()
+          if (inventoryItemIds.includes(itemData.id)) {
+            item.destroy()
+            return false
+          }
+          return true
+        })
+      }
+    }
   }
 
   private createOffice() {
@@ -55,6 +105,55 @@ export class GameScene extends Phaser.Scene {
     coffeeLabel.setOrigin(0.5)
   }
 
+  private createItems() {
+    const itemsData: Array<{ x: number; y: number; data: ItemData }> = [
+      {
+        x: 750,
+        y: 620,
+        data: {
+          id: 'coffee-cup',
+          name: 'Кофе',
+          description: 'Горячий кофе. Снижает стресс.',
+          sprite: 'item',
+          type: 'consumable',
+          usable: true,
+          effects: { stress: -15 },
+        },
+      },
+      {
+        x: 300,
+        y: 500,
+        data: {
+          id: 'documentation',
+          name: 'Документация',
+          description: 'Документация по проекту. Квестовый предмет.',
+          sprite: 'item',
+          type: 'quest',
+          usable: false,
+        },
+      },
+      {
+        x: 1200,
+        y: 300,
+        data: {
+          id: 'energy-drink',
+          name: 'Энергетик',
+          description: 'Бодрит! Но потом будет хуже...',
+          sprite: 'item',
+          type: 'consumable',
+          usable: true,
+          effects: { stress: -25 },
+        },
+      },
+    ]
+
+    itemsData.forEach(({ x, y, data }) => {
+      const item = new Item(this, x, y, data.sprite, data)
+      this.items.push(item)
+      this.add.existing(item)
+    })
+  }
+
   private createPlayer() {
     this.player = new Player(this, 200, 400)
     this.add.existing(this.player)
@@ -80,7 +179,7 @@ export class GameScene extends Phaser.Scene {
               speaker: 'Тим Лид',
               text: 'Твоя первая задача — найди документацию по проекту. Она где-то на кухне.',
               choices: [
-                { text: 'Понял, иду искать!', nextDialogue: 'accepted', respectChange: 5 },
+                { text: 'Понял, иду искать!', nextDialogue: 'accepted', startQuest: 'find-documentation', respectChange: 5 },
                 { text: 'А можно поподробнее?', nextDialogue: 'details', stressChange: -5 },
               ],
             },
@@ -105,6 +204,22 @@ export class GameScene extends Phaser.Scene {
             {
               speaker: 'Тим Лид',
               text: 'Так что ищи тщательно. Удачи!',
+              choices: [
+                { text: 'Понял, начинаю поиск!', startQuest: 'find-documentation', respectChange: 3 },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'has-documentation',
+          lines: [
+            {
+              speaker: 'Тим Лид',
+              text: 'Ты нашёл документацию? Отличная работа!',
+            },
+            {
+              speaker: 'Тим Лид',
+              text: 'Это важный первый шаг. Продолжай в том же духе!',
             },
           ],
         },
@@ -200,6 +315,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkInteraction() {
+    for (const item of this.items) {
+      const distance = Phaser.Math.Distance.Between(
+        this.player.x,
+        this.player.y,
+        item.x,
+        item.y
+      )
+
+      if (distance < 60) {
+        this.pickupItem(item)
+        return
+      }
+    }
+
     for (const npc of this.npcs) {
       const distance = Phaser.Math.Distance.Between(
         this.player.x,
@@ -210,8 +339,19 @@ export class GameScene extends Phaser.Scene {
 
       if (distance < 80) {
         this.startDialogue(npc)
-        break
+        return
       }
+    }
+  }
+
+  private pickupItem(item: Item) {
+    const itemData = item.getItemData()
+    const success = this.inventory.addItem(itemData)
+
+    if (success) {
+      const index = this.items.indexOf(item)
+      this.items.splice(index, 1)
+      item.destroy()
     }
   }
 
