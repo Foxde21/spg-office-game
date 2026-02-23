@@ -136,7 +136,7 @@ export class GameScene extends Phaser.Scene {
               speaker: 'Тим Лид',
               text: 'Твоя первая задача — найди документацию по проекту. Она где-то на кухне.',
               choices: [
-                { text: 'Понял, иду искать!', nextDialogue: 'accepted', respectChange: 5 },
+                { text: 'Понял, иду искать!', nextDialogue: 'accepted', startQuest: 'find-documentation', respectChange: 5 },
                 { text: 'А можно поподробнее?', nextDialogue: 'details', stressChange: -5 },
               ],
             },
@@ -161,6 +161,22 @@ export class GameScene extends Phaser.Scene {
             {
               speaker: 'Тим Лид',
               text: 'Так что ищи тщательно. Удачи!',
+              choices: [
+                { text: 'Понял, начинаю поиск!', startQuest: 'find-documentation', respectChange: 3 },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'has-documentation',
+          lines: [
+            {
+              speaker: 'Тим Лид',
+              text: 'Ты нашёл документацию? Отличная работа!',
+            },
+            {
+              speaker: 'Тим Лид',
+              text: 'Это важный первый шаг. Продолжай в том же духе!',
             },
           ],
         },

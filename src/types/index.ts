@@ -12,6 +12,15 @@ export interface DialogueChoice {
   respectChange?: number
   giveItem?: string
   takeItem?: string
+  startQuest?: string
+  completeQuest?: string
+  condition?: {
+    hasItem?: string
+    hasRespect?: number
+    hasStress?: number
+    hasQuest?: string
+    questCompleted?: string
+  }
 }
 
 export interface Dialogue {
@@ -44,13 +53,25 @@ export interface ItemEffects {
   respect?: number
 }
 
+export type QuestType = 'main' | 'side' | 'daily'
+
 export interface QuestData {
   id: string
   title: string
   description: string
+  type: QuestType
   completed: boolean
+  progress: number
   requiredItems?: string[]
   requiredDialogues?: string[]
+  rewards?: {
+    respect?: number
+    stress?: number
+  }
+  penalties?: {
+    respect?: number
+    stress?: number
+  }
 }
 
 export interface PlayerData {
