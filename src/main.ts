@@ -6,6 +6,7 @@ import { UIScene } from './scenes/UIScene'
 import { GameStateManager } from './managers/GameState'
 import { InventoryManager } from './managers/Inventory'
 import { QuestManager } from './managers/Quest'
+import { LocationManager } from './managers/LocationManager'
 import { SaveManager } from './managers/Save'
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -32,4 +33,5 @@ const game = new Phaser.Game(config)
 GameStateManager.getInstance(game)
 InventoryManager.getInstance(game)
 QuestManager.getInstance(game)
+LocationManager.getInstance(game)
 SaveManager.getInstance(game)

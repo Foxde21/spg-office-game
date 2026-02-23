@@ -12,14 +12,14 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     scene: Phaser.Scene,
     x: number,
     y: number,
-    texture: string,
+    animKey: string,
     id: string,
     name: string,
     role: string,
     dialogues: Dialogue[],
     isAI = false
   ) {
-    super(scene, x, y, texture)
+    super(scene, x, y, 'villagers')
     
     this.npcId = id
     this.npcName = name
@@ -29,6 +29,13 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     
     scene.physics.add.existing(this)
     this.setImmovable(true)
+    this.setScale(2)
+    this.setOrigin(0.5, 0.5)
+    
+    this.body!.setSize(16, 20)
+    this.body!.setOffset(8, 22)
+    
+    this.play(`${animKey}-idle-down`)
     
     this.createNameLabel(scene)
   }
