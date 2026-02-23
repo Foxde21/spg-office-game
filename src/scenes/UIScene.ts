@@ -3,6 +3,7 @@ import type { Dialogue, DialogueChoice, ItemData } from '../types'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
+import { SaveManager } from '../managers/Save'
 import { CAREER_LEVELS, COLORS } from '../config'
 
 export class UIScene extends Phaser.Scene {
@@ -15,6 +16,7 @@ export class UIScene extends Phaser.Scene {
   private gameState!: GameStateManager
   private inventory!: InventoryManager
   private questManager!: QuestManager
+  private saveManager!: SaveManager
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -24,6 +26,7 @@ export class UIScene extends Phaser.Scene {
   private inventoryBox!: Phaser.GameObjects.Container
   private inventoryOpen = false
   private inventoryKey!: Phaser.Input.Keyboard.Key
+  private saveKey!: Phaser.Input.Keyboard.Key
 
   private questPanel!: Phaser.GameObjects.Container
 
@@ -35,6 +38,7 @@ export class UIScene extends Phaser.Scene {
     this.gameState = GameStateManager.getInstance(this.game)
     this.inventory = InventoryManager.getInstance(this.game)
     this.questManager = QuestManager.getInstance(this.game)
+    this.saveManager = SaveManager.getInstance(this.game)
     
     this.createStatusBar()
     this.createDialogueBox()
@@ -47,6 +51,32 @@ export class UIScene extends Phaser.Scene {
   private setupInput() {
     this.inventoryKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I)
     this.inventoryKey.on('down', this.toggleInventory, this)
+    
+    this.saveKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F5)
+    this.saveKey.on('down', this.saveGame, this)
+  }
+
+  private saveGame() {
+    const success = this.saveManager.save()
+    if (success) {
+      this.showSaveMessage('Игра сохранена')
+    } else {
+      this.showSaveMessage('Ошибка сохранения')
+    }
+  }
+
+  private showSaveMessage(text: string) {
+    const msg = this.add.text(640, 50, text, {
+      fontSize: '16px',
+      color: '#00b894',
+      backgroundColor: '#000000aa',
+      padding: { x: 10, y: 5 },
+    })
+    msg.setOrigin(0.5)
+    
+    this.time.delayedCall(2000, () => {
+      msg.destroy()
+    })
   }
 
   private createStatusBar() {

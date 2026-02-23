@@ -4,6 +4,8 @@ import { NPC } from '../objects/NPC'
 import { Item } from '../objects/Item'
 import { GAME_WIDTH, GAME_HEIGHT } from '../config'
 import { InventoryManager } from '../managers/Inventory'
+import { SaveManager } from '../managers/Save'
+import { GameStateManager } from '../managers/GameState'
 import type { ItemData } from '../types'
 
 export class GameScene extends Phaser.Scene {
@@ -13,6 +15,8 @@ export class GameScene extends Phaser.Scene {
   private items: Item[] = []
   private interactKey!: Phaser.Input.Keyboard.Key
   private inventory!: InventoryManager
+  private saveManager!: SaveManager
+  private gameState!: GameStateManager
 
   constructor() {
     super({ key: 'GameScene' })
@@ -20,6 +24,8 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.inventory = InventoryManager.getInstance(this.game)
+    this.saveManager = SaveManager.getInstance(this.game)
+    this.gameState = GameStateManager.getInstance(this.game)
     this.createOffice()
     this.createPlayer()
     this.createItems()
@@ -28,6 +34,43 @@ export class GameScene extends Phaser.Scene {
     this.setupCamera()
 
     this.scene.launch('UIScene')
+    
+    this.loadSavedGame()
+    
+    this.saveManager.startAutoSave()
+    
+    this.game.events.on('questCompleted', this.onQuestCompleted, this)
+    this.game.events.on('itemAdded', this.onItemAdded, this)
+  }
+
+  private onQuestCompleted() {
+    this.gameState.setPlayerPosition(this.player.x, this.player.y)
+    this.saveManager.save()
+  }
+
+  private onItemAdded() {
+    this.gameState.setPlayerPosition(this.player.x, this.player.y)
+    this.saveManager.save()
+  }
+
+  private loadSavedGame() {
+    if (this.saveManager.hasSave()) {
+      const saveData = this.saveManager.load()
+      if (saveData && saveData.player) {
+        const pos = this.gameState.getPlayerPosition()
+        this.player.setPosition(pos.x, pos.y)
+        
+        const inventoryItemIds = saveData.inventory.map(item => item.id)
+        this.items = this.items.filter(item => {
+          const itemData = item.getItemData()
+          if (inventoryItemIds.includes(itemData.id)) {
+            item.destroy()
+            return false
+          }
+          return true
+        })
+      }
+    }
   }
 
   private createOffice() {
