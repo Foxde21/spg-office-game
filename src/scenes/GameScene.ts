@@ -155,7 +155,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPlayer() {
-    this.player = new Player(this, 200, 400, 'player')
+    this.player = new Player(this, 200, 400)
     this.add.existing(this.player)
   }
 
@@ -164,7 +164,7 @@ export class GameScene extends Phaser.Scene {
       this,
       600,
       300,
-      'npc',
+      'timlead',
       'Тим Лид',
       'Senior Developer',
       [
@@ -230,7 +230,7 @@ export class GameScene extends Phaser.Scene {
       this,
       900,
       400,
-      'npc',
+      'hr',
       'Анна HR',
       'HR Manager',
       [
