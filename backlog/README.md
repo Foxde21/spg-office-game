@@ -11,9 +11,25 @@
 1. Создаем тикет по шаблону `TEMPLATE.md`
 2. Заполняем DOR — проверяем готовность
 3. Перемещаем в `todo/`
-4. Берем в работу → перемещаем в `in-progress/`
-5. Выполняем все пункты DOD
-6. Перемещаем в `done/`
+4. **Создаем ветку:** `git checkout -b feature/<ticket-id>-<description>`
+5. Берем в работу → перемещаем в `in-progress/`
+6. Выполняем все пункты DOD
+7. Коммитим в ветку (НЕ в main!)
+8. Push + PR
+9. Перемещаем в `done/`
+
+## Git Branches
+
+**Каждая задача — в отдельной ветке!**
+
+```
+feature/001-quest-system
+feature/002-inventory-system
+bugfix/003-dialogue-fix
+refactor/004-player-movement
+```
+
+**Запрещено коммитить напрямую в main!**
 
 ## Приоритеты
 

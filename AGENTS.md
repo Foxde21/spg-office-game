@@ -157,12 +157,60 @@ this.game.events.off('questCompleted', this.handleQuest, this)
 3. **Singleton Managers** — Global state through manager classes
 4. **Strict Types** — No `any`, use proper interfaces
 
+## Git Workflow
+
+### Branch Naming
+
+Each task must be done in a separate branch:
+
+```
+<type>/<ticket-id>-<short-description>
+```
+
+**Types:**
+- `feature/` — new functionality
+- `bugfix/` — bug fixes
+- `refactor/` — code refactoring
+
+**Examples:**
+```
+feature/001-quest-system
+feature/002-inventory-system
+bugfix/003-dialogue-fix
+refactor/004-player-movement
+```
+
+### Workflow
+
+1. Pick a task from `backlog/todo/`
+2. Create branch: `git checkout -b feature/001-quest-system`
+3. Move task to `backlog/in-progress/`
+4. Implement, test, verify DOD
+5. Commit: `git commit -m "feat(quests): add quest system"`
+6. Push: `git push -u origin feature/001-quest-system`
+7. Create PR or merge to main
+8. Move task to `backlog/done/`
+
+### Commit Messages
+
+Format: `<type>(<scope>): <message>`
+
+```
+feat(quests): add quest completion rewards
+fix(dialogues): fix choice effects not applying
+refactor(player): optimize movement logic
+docs(readme): update installation instructions
+```
+
+**NEVER commit directly to main branch.**
+
 ## Definition of Done
 
 - [ ] Code runs without console errors
 - [ ] Tested manually in browser
 - [ ] TypeScript compiles without errors (`npm run build`)
 - [ ] No unused variables/imports
+- [ ] Changes committed to feature branch (not main)
 
 ## Common Mistakes to Avoid
 
