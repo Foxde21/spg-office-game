@@ -20,3 +20,9 @@ export const CAREER_LEVELS = [
 ] as const
 
 export type CareerLevel = typeof CAREER_LEVELS[number]['id']
+
+export const SPRITE = {
+  frameWidth: 32,
+  frameHeight: 42,
+  playerIndex: 0,
+}

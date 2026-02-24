@@ -7,6 +7,9 @@ export class PreloadScene extends Phaser.Scene {
 
   preload() {
     this.createLoadingBar()
+    this.load.atlas('villagers', 'assets/Villagers/VillagersSheetPNG.png', 'assets/Villagers/villagers-atlas.json')
+    // PixelOffice atlas (single-frame placeholder)
+    this.load.atlas('pixeloffice', 'assets/PixelOffice/PixelOfficeAssets.png', 'assets/PixelOffice/PixelOfficeAssetsAtlas.json')
   }
 
   private createLoadingBar() {
@@ -38,6 +41,10 @@ export class PreloadScene extends Phaser.Scene {
       progressBar.fillRect(width / 2 - 150, height / 2 - 15, 300 * value, 30)
     })
 
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      console.error('Load error:', file.key, file.url)
+    })
+
     this.load.on('complete', () => {
       progressBar.destroy()
       progressBox.destroy()
@@ -47,8 +54,91 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create() {
+    this.createAnimations()
     this.createPlaceholderAssets()
     this.scene.start('GameScene')
+  }
+
+  private createAnimations() {
+    this.anims.create({
+      key: 'player-idle-down',
+      frames: [{ key: 'villagers', frame: 'player-down-1' }],
+      frameRate: 1,
+    })
+
+    this.anims.create({
+      key: 'player-idle-up',
+      frames: [{ key: 'villagers', frame: 'player-up-1' }],
+      frameRate: 1,
+    })
+
+    this.anims.create({
+      key: 'player-idle-right',
+      frames: [{ key: 'villagers', frame: 'player-right-1' }],
+      frameRate: 1,
+    })
+
+    this.anims.create({
+      key: 'player-idle-left',
+      frames: [{ key: 'villagers', frame: 'player-right-1' }],
+      frameRate: 1,
+    })
+
+    this.anims.create({
+      key: 'player-walk-down',
+      frames: [
+        { key: 'villagers', frame: 'player-down-0' },
+        { key: 'villagers', frame: 'player-down-2' },
+        { key: 'villagers', frame: 'player-down-1' },
+      ],
+      frameRate: 8,
+      repeat: -1,
+    })
+
+    this.anims.create({
+      key: 'player-walk-up',
+      frames: [
+        { key: 'villagers', frame: 'player-up-0' },
+        { key: 'villagers', frame: 'player-up-2' },
+        { key: 'villagers', frame: 'player-up-1' },
+      ],
+      frameRate: 8,
+      repeat: -1,
+    })
+
+    this.anims.create({
+      key: 'player-walk-right',
+      frames: [
+        { key: 'villagers', frame: 'player-right-0' },
+        { key: 'villagers', frame: 'player-right-2' },
+        { key: 'villagers', frame: 'player-right-1' },
+      ],
+      frameRate: 8,
+      repeat: -1,
+    })
+
+    this.anims.create({
+      key: 'player-walk-left',
+      frames: [
+        { key: 'villagers', frame: 'player-right-2' },
+        { key: 'villagers', frame: 'player-right-0' },
+        { key: 'villagers', frame: 'player-right-1' },
+      ],
+      frameRate: 8,
+      repeat: -1,
+    })
+
+    this.anims.create({
+      key: 'timlead-idle-down',
+      frames: [{ key: 'villagers', frame: 'timlead-down-1' }],
+      frameRate: 1,
+    })
+
+    this.anims.create({
+      key: 'hr-idle-down',
+      frames: [{ key: 'villagers', frame: 'hr-down-1' }],
+      frameRate: 1,
+    })
   }
 
   private createPlaceholderAssets() {

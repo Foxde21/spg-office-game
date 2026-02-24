@@ -10,13 +10,53 @@ Theme: "Path from Junior to Team Lead without burning out."
 ## Commands
 
 ```bash
-npm install        # Install dependencies
-npm run dev        # Start dev server (http://localhost:3000)
-npm run build      # TypeScript check + production build
-npm run preview    # Preview production build
+npm install           # Install dependencies
+npm run dev           # Start both client + AI server (client: :3000, server: :3001)
+npm run dev:client    # Start Vite dev server only (http://localhost:3000)
+npm run dev:server    # Start Express AI proxy server only (http://localhost:3001)
+npm run build         # TypeScript check + production build
+npm run preview       # Preview production build
+
+# Testing
+npm run test          # Run unit tests (Vitest)
+npm run test:ui       # Run unit tests with UI
+npm run test:coverage # Run unit tests with coverage report
+npm run test:e2e      # Run E2E tests (Playwright)
+npm run test:e2e:ui   # Run E2E tests with UI
+npm run test:all      # Run all tests (unit + e2e)
 ```
 
-**Note:** No test framework configured yet. Manual testing via `npm run dev`.
+## Environment Setup
+
+Create `.env` file in project root:
+
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+CLIENT_URL=http://localhost:3000
+SERVER_PORT=3001
+```
+
+Get OpenRouter API key at https://openrouter.ai/keys
+
+## Testing Strategy
+
+### Unit Tests (Vitest)
+- Test managers in isolation: GameState, Inventory, Quest
+- Mock Phaser Game object
+- Fast execution, no browser needed
+- Located in `tests/unit/`
+
+### E2E Tests (Playwright)
+- Test gameplay flows: movement, dialogue, quests
+- Real browser testing
+- Located in `e2e/`
+- Run against dev server
+
+### Test File Naming
+- Unit: `*.test.ts` in `tests/unit/`
+- E2E: `*.spec.ts` in `e2e/`
+
+See `docs/testing.md` for detailed testing guide.
 
 ## Project Structure
 
@@ -27,7 +67,12 @@ src/
 ├── types/         # TypeScript interfaces
 ├── scenes/        # Phaser scenes (Boot, Preload, Game, UI)
 ├── objects/       # Game objects (Player, NPC, Items)
-└── managers/      # Singleton managers (future)
+├── managers/      # Singleton managers (GameState, Inventory, Quest, Save, AIDialogue)
+└── data/          # Game data (NPC prompts, items, quests)
+
+server/
+├── index.ts       # Express server entry point
+└── routes/        # API routes (ai.ts)
 ```
 
 ## Code Style
@@ -221,6 +266,8 @@ docs(readme): update installation instructions
 - [ ] TypeScript compiles without errors (`npm run build`)
 - [ ] No unused variables/imports
 - [ ] Changes committed to feature branch (not main)
+- [ ] Unit tests written for managers (if applicable)
+- [ ] All tests pass (`npm run test`)
 
 ## Common Mistakes to Avoid
 

@@ -3,6 +3,11 @@ import { BootScene } from './scenes/BootScene'
 import { PreloadScene } from './scenes/PreloadScene'
 import { GameScene } from './scenes/GameScene'
 import { UIScene } from './scenes/UIScene'
+import { GameStateManager } from './managers/GameState'
+import { InventoryManager } from './managers/Inventory'
+import { QuestManager } from './managers/Quest'
+import { LocationManager } from './managers/LocationManager'
+import { SaveManager } from './managers/Save'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -10,6 +15,9 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 720,
   parent: 'game-container',
   backgroundColor: '#2d2d44',
+  dom: {
+    createContainer: true,
+  },
   physics: {
     default: 'arcade',
     arcade: {
@@ -24,4 +32,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 }
 
-new Phaser.Game(config)
+const game = new Phaser.Game(config)
+GameStateManager.getInstance(game)
+InventoryManager.getInstance(game)
+QuestManager.getInstance(game)
+LocationManager.getInstance(game)
+SaveManager.getInstance(game)

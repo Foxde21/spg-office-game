@@ -1,34 +1,47 @@
 import Phaser from 'phaser'
-import { Dialogue } from '../types'
+import type { Dialogue } from '../types'
 
 export class NPC extends Phaser.Physics.Arcade.Sprite {
-  private name: string
+  private npcId: string
+  private npcName: string
   private role: string
   private dialogues: Dialogue[]
+  private isAI: boolean
 
   constructor(
     scene: Phaser.Scene,
     x: number,
     y: number,
-    texture: string,
+    animKey: string,
+    id: string,
     name: string,
     role: string,
-    dialogues: Dialogue[]
+    dialogues: Dialogue[],
+    isAI = false
   ) {
-    super(scene, x, y, texture)
+    super(scene, x, y, 'villagers')
     
-    this.name = name
+    this.npcId = id
+    this.npcName = name
     this.role = role
     this.dialogues = dialogues
+    this.isAI = isAI
     
     scene.physics.add.existing(this)
     this.setImmovable(true)
+    this.setScale(2)
+    this.setOrigin(0.5, 0.5)
+    
+    this.body!.setSize(16, 20)
+    this.body!.setOffset(8, 22)
+    
+    this.play(`${animKey}-idle-down`)
     
     this.createNameLabel(scene)
   }
 
   private createNameLabel(scene: Phaser.Scene) {
-    const label = scene.add.text(this.x, this.y - 50, this.name, {
+    const label = scene.add.text(this.x, this.y - 50, this.npcName, {
       fontSize: '14px',
       color: '#ffffff',
       backgroundColor: '#000000aa',
@@ -37,15 +50,26 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     label.setOrigin(0.5)
   }
 
-  getDialogue(): Dialogue {
+  getDialogue(): Dialogue | { npcId: string; name: string; isAI: true } {
+    if (this.isAI) {
+      return { npcId: this.npcId, name: this.npcName, isAI: true }
+    }
     return this.dialogues[0]
   }
 
   getName(): string {
-    return this.name
+    return this.npcName
   }
 
   getRole(): string {
     return this.role
+  }
+
+  getId(): string {
+    return this.npcId
+  }
+
+  isAINPC(): boolean {
+    return this.isAI
   }
 }
