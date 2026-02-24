@@ -12,7 +12,12 @@ import type { LocationData, ItemData } from '../types'
 
 export class GameScene extends Phaser.Scene {
   private player!: Player
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private moveInput = {
+    left: false,
+    right: false,
+    up: false,
+    down: false
+  }
   private npcs: NPC[] = []
   private items: Item[] = []
   private doors: Door[] = []
@@ -20,6 +25,7 @@ export class GameScene extends Phaser.Scene {
   private decorColliders!: Phaser.Physics.Arcade.StaticGroup
   private decorGraphics: Phaser.GameObjects.Graphics | null = null
   private interactKey!: Phaser.Input.Keyboard.Key
+  private moveBindings!: { left: string; right: string; up: string; down: string }
   private inventory!: InventoryManager
   private locationManager!: LocationManager
   private saveManager!: SaveManager
@@ -292,8 +298,50 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupInput() {
-    this.cursors = this.input.keyboard!.createCursorKeys()
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E)
+
+    const stored = localStorage.getItem('bindings')
+    const defaults = {
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      up: 'ArrowUp',
+      down: 'ArrowDown'
+    }
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { left?: string; right?: string; up?: string; down?: string }
+        this.moveBindings = {
+          left: parsed.left || defaults.left,
+          right: parsed.right || defaults.right,
+          up: parsed.up || defaults.up,
+          down: parsed.down || defaults.down
+        }
+      } catch {
+        this.moveBindings = defaults
+      }
+    } else {
+      this.moveBindings = defaults
+    }
+
+    const keyboard = this.input.keyboard
+    if (!keyboard) return
+
+    keyboard.on('keydown', (ev: KeyboardEvent) => {
+      const code = ev.code
+      if (code === this.moveBindings.left) this.moveInput.left = true
+      if (code === this.moveBindings.right) this.moveInput.right = true
+      if (code === this.moveBindings.up) this.moveInput.up = true
+      if (code === this.moveBindings.down) this.moveInput.down = true
+    })
+
+    keyboard.on('keyup', (ev: KeyboardEvent) => {
+      const code = ev.code
+      if (code === this.moveBindings.left) this.moveInput.left = false
+      if (code === this.moveBindings.right) this.moveInput.right = false
+      if (code === this.moveBindings.up) this.moveInput.up = false
+      if (code === this.moveBindings.down) this.moveInput.down = false
+    })
   }
 
   private setupCamera() {
@@ -304,7 +352,7 @@ export class GameScene extends Phaser.Scene {
 
   update() {
     if (this.player) {
-      this.player.update(this.cursors)
+      this.player.update(this.moveInput)
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
