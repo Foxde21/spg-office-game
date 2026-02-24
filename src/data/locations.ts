@@ -178,8 +178,8 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
         name: 'Анна HR',
         role: 'HR Manager',
         sprite: 'hr',
-        x: 500,
-        y: 300,
+        x: 400,
+        y: 312,
         dialogues: [
           {
             id: 'hr-intro',
@@ -264,7 +264,7 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
         role: 'CEO',
         sprite: 'timlead',
         x: 640,
-        y: 200,
+        y: 160,
         dialogues: [
           {
             id: 'director-intro',
