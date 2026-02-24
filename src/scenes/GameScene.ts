@@ -17,6 +17,7 @@ export class GameScene extends Phaser.Scene {
   private items: Item[] = []
   private doors: Door[] = []
   private backgroundTiles: Phaser.GameObjects.Sprite[] = []
+  private decorImages: Phaser.GameObjects.Image[] = []
   private decorColliders!: Phaser.Physics.Arcade.StaticGroup
   private decorGraphics: Phaser.GameObjects.Graphics | null = null
   private interactKey!: Phaser.Input.Keyboard.Key
@@ -125,6 +126,8 @@ export class GameScene extends Phaser.Scene {
 
   private clearLocation() {
     this.decorColliders.clear(true, true)
+    this.decorImages.forEach((img) => img.destroy())
+    this.decorImages = []
     this.npcs.forEach((npc) => npc.destroy())
     this.items.forEach((item) => item.destroy())
     this.doors.forEach((door) => door.destroy())
@@ -133,7 +136,7 @@ export class GameScene extends Phaser.Scene {
       this.decorGraphics.destroy()
       this.decorGraphics = null
     }
-    
+
     this.npcs = []
     this.items = []
     this.doors = []
@@ -150,6 +153,7 @@ export class GameScene extends Phaser.Scene {
         const isWall = y === 0 || y === rows - 1 || x === 0 || x === cols - 1
         const texture = isWall ? 'wall' : 'floor'
         const sprite = this.add.sprite(x * tileSize + tileSize / 2, y * tileSize + tileSize / 2, texture)
+        sprite.setDepth(0)
         this.backgroundTiles.push(sprite)
       }
     }
@@ -159,90 +163,194 @@ export class GameScene extends Phaser.Scene {
 
   private createLocationDecor(location: LocationData) {
     this.decorGraphics = this.add.graphics()
+    this.decorGraphics.setDepth(0)
 
     if (location.id === 'open-space') {
-      const S_PART_DESK = 3
-      const S_COMP = 2
-      const COLLISION_SHRINK_Y = 20
-      const addSolid = (x: number, y: number, frame: string, w: number, h: number, scale: number, flipY = false, flipX = false) => {
-        const img = this.add.image(x, y, 'pixeloffice', frame)
-        img.setDisplaySize(w * scale, h * scale)
-        if (flipY) img.setFlipY(true)
-        if (flipX) img.setFlipX(true)
-        img.setDepth(2)
-        this.physics.add.existing(img, true)
-        const body = (img.body as Phaser.Physics.Arcade.StaticBody)
-        const dw = img.displayWidth
-        const dh = img.displayHeight
-        const newH = Math.max(dh - COLLISION_SHRINK_Y, 8)
-        body.setSize(dw, newH)
-        body.setOffset(0, (dh - newH) / 2)
-        this.decorColliders.add(img)
-      }
-
-      const partW = 84
-      const partH = 20
-      const deskPairW = 44
-      const deskPairH = 30
-      const compW = 20
-      const compH = 22
-      const passage = 90
-      const partDisplayW = partW * S_PART_DESK
-      const totalPartRow = 3 * partDisplayW + 2 * passage
-      const centerStartX = (1280 - totalPartRow) / 2 + partDisplayW / 2
-      const colX = [
-        centerStartX,
-        centerStartX + partDisplayW + passage,
-        centerStartX + (partDisplayW + passage) * 2,
-      ]
-
-      const partRowY: number[] = [210, 302, 394]
-      const deskRowY: number[] = [235, 327, 419]
-      const computerOffsetX = -36
-      const computerOffsetY: number[] = [6, 6, 6]
-
-      partRowY.forEach((y) => {
-        colX.forEach((x) => addSolid(x, y, 'partition', partW, partH, S_PART_DESK))
-      })
-
-      deskRowY.forEach((y, rowIndex) => {
-        colX.forEach((x) => {
-          addSolid(x, y, 'desk_pair', deskPairW, deskPairH, S_PART_DESK, true)
-          addSolid(x + computerOffsetX, y + computerOffsetY[rowIndex], 'computer', compW, compH, S_COMP)
-        })
-      })
-
-      const rightDeskOffsetY = 5
-      const rightDeskOffsetX = 28
-      deskRowY.forEach((rowY) => {
-        colX.forEach((x) => {
-          addSolid(x + rightDeskOffsetX, rowY + rightDeskOffsetY, 'computer2', compW, compH, S_COMP, false, true)
-        })
-      })
+      this.createOpenSpaceDecor()
     } else if (location.id === 'kitchen') {
-      this.decorGraphics.fillStyle(0x4a3728)
-      this.decorGraphics.fillRect(500, 300, 120, 80)
-      
-      this.decorGraphics.fillStyle(0x555555)
-      this.decorGraphics.fillRect(800, 350, 60, 100)
-      
-      const coffeeLabel = this.add.text(560, 340, '☕', { fontSize: '32px' })
-      coffeeLabel.setOrigin(0.5)
-      coffeeLabel.setName('decor-label')
-      this.backgroundTiles.push(coffeeLabel as any)
+      this.createKitchenDecor()
     } else if (location.id === 'meeting-room') {
-      this.decorGraphics.fillStyle(0x5a4a3a)
-      this.decorGraphics.fillRect(400, 250, 200, 100)
-      
-      this.decorGraphics.fillStyle(0x4a4a5a)
-      this.decorGraphics.fillRect(200, 150, 80, 60)
+      this.createMeetingRoomDecor()
     } else if (location.id === 'director-office') {
-      this.decorGraphics.fillStyle(0x6a5a4a)
-      this.decorGraphics.fillRect(500, 150, 200, 80)
-      
-      this.decorGraphics.fillStyle(0x4a5a6a)
-      this.decorGraphics.fillRect(900, 200, 80, 60)
+      this.createDirectorOfficeDecor()
     }
+  }
+
+  private addSolid(
+    x: number, y: number, frame: string,
+    w: number, h: number, scale: number,
+    shrinkY = 20, flipY = false, flipX = false
+  ) {
+    const img = this.add.image(x, y, 'pixeloffice', frame)
+    img.setDisplaySize(w * scale, h * scale)
+    if (flipY) img.setFlipY(true)
+    if (flipX) img.setFlipX(true)
+    img.setDepth(2)
+    this.physics.add.existing(img, true)
+    const body = (img.body as Phaser.Physics.Arcade.StaticBody)
+    const dw = img.displayWidth
+    const dh = img.displayHeight
+    const newH = Math.max(dh - shrinkY, 8)
+    body.setSize(dw, newH)
+    body.setOffset(0, (dh - newH) / 2)
+    this.decorColliders.add(img)
+  }
+
+  private addDecor(
+    x: number, y: number, frame: string,
+    w: number, h: number, scale: number,
+    depth = 1, flipY = false, flipX = false
+  ) {
+    const img = this.add.image(x, y, 'pixeloffice', frame)
+    img.setDisplaySize(w * scale, h * scale)
+    if (flipY) img.setFlipY(true)
+    if (flipX) img.setFlipX(true)
+    img.setDepth(depth)
+    this.decorImages.push(img)
+  }
+
+  private createOpenSpaceDecor() {
+    const S_PART_DESK = 3
+    const S_COMP = 2
+    const partW = 84
+    const partH = 20
+    const deskPairW = 44
+    const deskPairH = 30
+    const compW = 20
+    const compH = 22
+    const passage = 90
+    const partDisplayW = partW * S_PART_DESK
+    const totalPartRow = 3 * partDisplayW + 2 * passage
+    const centerStartX = (1280 - totalPartRow) / 2 + partDisplayW / 2
+    const colX = [
+      centerStartX,
+      centerStartX + partDisplayW + passage,
+      centerStartX + (partDisplayW + passage) * 2,
+    ]
+
+    const partRowY: number[] = [210, 302, 394]
+    const deskRowY: number[] = [235, 327, 419]
+    const computerOffsetX = -36
+    const computerOffsetY: number[] = [6, 6, 6]
+
+    partRowY.forEach((y) => {
+      colX.forEach((x) => this.addSolid(x, y, 'partition', partW, partH, S_PART_DESK))
+    })
+
+    deskRowY.forEach((y, rowIndex) => {
+      colX.forEach((x) => {
+        this.addSolid(x, y, 'desk_pair', deskPairW, deskPairH, S_PART_DESK, 20, true)
+        this.addSolid(x + computerOffsetX, y + computerOffsetY[rowIndex], 'computer', compW, compH, S_COMP)
+      })
+    })
+
+    const rightDeskOffsetY = 5
+    const rightDeskOffsetX = 28
+    deskRowY.forEach((rowY) => {
+      colX.forEach((x) => {
+        this.addSolid(x + rightDeskOffsetX, rowY + rightDeskOffsetY, 'computer2', compW, compH, S_COMP, 20, false, true)
+      })
+    })
+  }
+
+  private createKitchenDecor() {
+    const S = 3
+    const cx = 640
+
+    this.addSolid(cx, 260, 'blue_partition', 73, 24, 2.5, 14)
+    this.addSolid(cx - 110, 300, 'desk_big', 44, 20, S, 10)
+    this.addSolid(cx + 110, 300, 'desk_big', 44, 20, S, 10)
+
+    this.addDecor(cx - 110, 268, 'chair', 11, 22, 2.5, 2)
+    this.addDecor(cx - 110, 340, 'chair', 11, 22, 2.5, 2, true)
+    this.addDecor(cx + 110, 268, 'chair', 11, 22, 2.5, 2)
+    this.addDecor(cx + 110, 340, 'chair', 11, 22, 2.5, 2, true)
+
+    this.addSolid(200, 220, 'vending_machine', 24, 34, 3, 14)
+    this.addSolid(310, 220, 'vending_red', 24, 31, 3, 14)
+
+    this.addSolid(1020, 220, 'desk_big', 44, 20, 3.5, 10)
+    this.addSolid(1020, 278, 'shelf_small', 11, 8, 4, 6)
+    this.addSolid(1020, 318, 'shelf_small', 11, 8, 4, 6)
+
+    this.addSolid(860, 235, 'water_cooler', 9, 17, 3.5, 6)
+
+    this.addDecor(420, 140, 'plant', 7, 11, 3.5, 2)
+    this.addDecor(860, 140, 'plant', 7, 11, 3.5, 2)
+
+    this.addDecor(cx, 76, 'clock_display', 19, 6, 3.5, 1)
+    this.addDecor(320, 120, 'window_blue', 26, 21, 3, 1)
+    this.addDecor(960, 120, 'window_blue', 26, 21, 3, 1)
+
+    this.addSolid(cx - 180, 440, 'sofa_gray', 33, 15, 3.5, 8)
+    this.addSolid(cx + 180, 440, 'sofa_gray', 33, 15, 3.5, 8)
+
+    this.addSolid(cx, 455, 'desk_small', 30, 20, 2.5, 8)
+
+    this.addDecor(665, 468, 'trash_bin', 9, 14, 2.5, 2)
+  }
+
+  private createMeetingRoomDecor() {
+    const cx = 640
+
+    this.addSolid(580, 312, 'desk_big', 44, 20, 4, 14)
+    this.addSolid(cx, 312, 'desk_big', 44, 20, 4, 14)
+    this.addSolid(700, 312, 'desk_big', 44, 20, 4, 14)
+
+    const chairY = [272, 352]
+    const chairXOffsets = [-120, -60, 0, 60, 120]
+    chairXOffsets.forEach((dx) => {
+      chairY.forEach((y) => {
+        this.addDecor(cx + dx, y, 'chair', 11, 22, 2.5, 2)
+      })
+    })
+
+    this.addSolid(cx, 140, 'whiteboard', 26, 20, 4.5, 10)
+    this.addDecor(cx - 90, 140, 'flag_poster', 12, 9, 3.5, 1)
+    this.addDecor(cx + 90, 140, 'flag_poster', 12, 9, 3.5, 1)
+
+    this.addDecor(200, 120, 'window_blue', 26, 21, 3.5, 1)
+    this.addDecor(1080, 120, 'window_blue', 26, 21, 3.5, 1)
+
+    this.addDecor(150, 380, 'plant', 7, 11, 4, 2)
+    this.addDecor(1130, 380, 'plant', 7, 11, 4, 2)
+    this.addDecor(150, 170, 'plant', 7, 11, 4, 2)
+    this.addDecor(1130, 170, 'plant', 7, 11, 4, 2)
+
+    this.addSolid(200, 480, 'sofa_blue', 33, 16, 4, 8)
+    this.addSolid(1080, 480, 'sofa_blue', 33, 16, 4, 8)
+
+    this.addDecor(cx, 76, 'clock_display', 19, 6, 3.5, 1)
+  }
+
+  private createDirectorOfficeDecor() {
+    const cx = 640
+
+    this.addSolid(cx, 235, 'desk_big', 44, 20, 5, 14)
+    this.addSolid(cx - 65, 224, 'computer', 20, 22, 2.5, 10)
+
+    this.addSolid(280, 205, 'desk_big', 44, 20, 3.5, 10)
+    this.addSolid(280, 260, 'shelf_small', 11, 8, 5, 6)
+    this.addSolid(280, 300, 'shelf_small', 11, 8, 5, 6)
+    this.addSolid(280, 340, 'shelf_small', 11, 8, 5, 6)
+
+    this.addSolid(920, 445, 'sofa_orange', 33, 16, 4, 8)
+    this.addDecor(920, 492, 'desk_small', 30, 20, 2.5, 2)
+
+    this.addDecor(200, 120, 'window_blue', 26, 21, 3.5, 1)
+    this.addDecor(cx, 120, 'window_blue', 26, 21, 3.5, 1)
+    this.addDecor(1080, 120, 'window_blue', 26, 21, 3.5, 1)
+
+    this.addDecor(180, 360, 'plant', 7, 11, 4, 2)
+    this.addDecor(1100, 360, 'plant', 7, 11, 4, 2)
+    this.addDecor(180, 195, 'plant', 7, 11, 3.5, 2)
+    this.addDecor(1100, 195, 'plant', 7, 11, 3.5, 2)
+
+    this.addDecor(cx, 76, 'clock_display', 19, 6, 3.5, 1)
+    this.addDecor(920, 138, 'flag_poster', 12, 9, 3.5, 1)
+
+    this.addSolid(880, 208, 'desk_small', 30, 20, 3, 10)
+    this.addDecor(880, 196, 'monitor_small', 17, 11, 2.5, 3)
   }
 
   private createLocationObjects(_location: LocationData) {
