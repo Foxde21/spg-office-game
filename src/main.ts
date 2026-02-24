@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import { BootScene } from './scenes/BootScene'
 import { PreloadScene } from './scenes/PreloadScene'
-import { GameScene } from './scenes/GameScene'
+import { MenuScene } from './scenes/MenuScene'
 import { MenuSceneV2 } from './scenes/MenuSceneV2'
 import { UIScene } from './scenes/UIScene'
 import { GameStateManager } from './managers/GameState'
@@ -26,7 +26,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, PreloadScene, MenuSceneV2, GameScene, UIScene],
+  scene: [BootScene, PreloadScene, MenuScene, GameScene, UIScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
