@@ -1,8 +1,13 @@
 import Phaser from 'phaser'
 
 export class PreloadScene extends Phaser.Scene {
+  private runGame: boolean = false
   constructor() {
     super({ key: 'PreloadScene' })
+  }
+
+  init(data: { runGame?: boolean }) {
+    this.runGame = !!data?.runGame
   }
 
   preload() {
@@ -56,89 +61,114 @@ export class PreloadScene extends Phaser.Scene {
   create() {
     this.createAnimations()
     this.createPlaceholderAssets()
-    this.scene.start('GameScene')
+    console.log('PreloadScene: runGame =', this.runGame)
+    if (this.runGame) {
+      this.scene.start('GameScene')
+    } else {
+      this.scene.start('MenuScene')
+    }
   }
 
   private createAnimations() {
-    this.anims.create({
-      key: 'player-idle-down',
-      frames: [{ key: 'villagers', frame: 'player-down-1' }],
-      frameRate: 1,
-    })
+    if (!this.anims.exists('player-idle-down')) {
+      this.anims.create({
+        key: 'player-idle-down',
+        frames: [{ key: 'villagers', frame: 'player-down-1' }],
+        frameRate: 1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-idle-up',
-      frames: [{ key: 'villagers', frame: 'player-up-1' }],
-      frameRate: 1,
-    })
+    if (!this.anims.exists('player-idle-up')) {
+      this.anims.create({
+        key: 'player-idle-up',
+        frames: [{ key: 'villagers', frame: 'player-up-1' }],
+        frameRate: 1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-idle-right',
-      frames: [{ key: 'villagers', frame: 'player-right-1' }],
-      frameRate: 1,
-    })
+    if (!this.anims.exists('player-idle-right')) {
+      this.anims.create({
+        key: 'player-idle-right',
+        frames: [{ key: 'villagers', frame: 'player-right-1' }],
+        frameRate: 1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-idle-left',
-      frames: [{ key: 'villagers', frame: 'player-right-1' }],
-      frameRate: 1,
-    })
+    if (!this.anims.exists('player-idle-left')) {
+      this.anims.create({
+        key: 'player-idle-left',
+        frames: [{ key: 'villagers', frame: 'player-right-1' }],
+        frameRate: 1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-walk-down',
-      frames: [
-        { key: 'villagers', frame: 'player-down-0' },
-        { key: 'villagers', frame: 'player-down-2' },
-        { key: 'villagers', frame: 'player-down-1' },
-      ],
-      frameRate: 8,
-      repeat: -1,
-    })
+    if (!this.anims.exists('player-walk-down')) {
+      this.anims.create({
+        key: 'player-walk-down',
+        frames: [
+          { key: 'villagers', frame: 'player-down-0' },
+          { key: 'villagers', frame: 'player-down-2' },
+          { key: 'villagers', frame: 'player-down-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-walk-up',
-      frames: [
-        { key: 'villagers', frame: 'player-up-0' },
-        { key: 'villagers', frame: 'player-up-2' },
-        { key: 'villagers', frame: 'player-up-1' },
-      ],
-      frameRate: 8,
-      repeat: -1,
-    })
+    if (!this.anims.exists('player-walk-up')) {
+      this.anims.create({
+        key: 'player-walk-up',
+        frames: [
+          { key: 'villagers', frame: 'player-up-0' },
+          { key: 'villagers', frame: 'player-up-2' },
+          { key: 'villagers', frame: 'player-up-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-walk-right',
-      frames: [
-        { key: 'villagers', frame: 'player-right-0' },
-        { key: 'villagers', frame: 'player-right-2' },
-        { key: 'villagers', frame: 'player-right-1' },
-      ],
-      frameRate: 8,
-      repeat: -1,
-    })
+    if (!this.anims.exists('player-walk-right')) {
+      this.anims.create({
+        key: 'player-walk-right',
+        frames: [
+          { key: 'villagers', frame: 'player-right-0' },
+          { key: 'villagers', frame: 'player-right-2' },
+          { key: 'villagers', frame: 'player-right-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
 
-    this.anims.create({
-      key: 'player-walk-left',
-      frames: [
-        { key: 'villagers', frame: 'player-right-2' },
-        { key: 'villagers', frame: 'player-right-0' },
-        { key: 'villagers', frame: 'player-right-1' },
-      ],
-      frameRate: 8,
-      repeat: -1,
-    })
+    if (!this.anims.exists('player-walk-left')) {
+      this.anims.create({
+        key: 'player-walk-left',
+        frames: [
+          { key: 'villagers', frame: 'player-right-2' },
+          { key: 'villagers', frame: 'player-right-0' },
+          { key: 'villagers', frame: 'player-right-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
 
-    this.anims.create({
-      key: 'timlead-idle-down',
-      frames: [{ key: 'villagers', frame: 'timlead-down-1' }],
-      frameRate: 1,
-    })
+    if (!this.anims.exists('timlead-idle-down')) {
+      this.anims.create({
+        key: 'timlead-idle-down',
+        frames: [{ key: 'villagers', frame: 'timlead-down-1' }],
+        frameRate: 1,
+      })
+    }
 
-    this.anims.create({
-      key: 'hr-idle-down',
-      frames: [{ key: 'villagers', frame: 'hr-down-1' }],
-      frameRate: 1,
-    })
+    if (!this.anims.exists('hr-idle-down')) {
+      this.anims.create({
+        key: 'hr-idle-down',
+        frames: [{ key: 'villagers', frame: 'hr-down-1' }],
+        frameRate: 1,
+      })
+    }
   }
 
   private createPlaceholderAssets() {
