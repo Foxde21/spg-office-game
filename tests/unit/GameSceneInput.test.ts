@@ -35,7 +35,7 @@ describe('GameScene movement bindings', () => {
 
   const createScene = () => {
     const scene: any = new GameSceneClass()
-    const addKey = vi.fn().mockReturnValue({})
+    const addKey = vi.fn().mockReturnValue({ on: vi.fn() })
     const on = vi.fn()
     scene.input = {
       keyboard: {

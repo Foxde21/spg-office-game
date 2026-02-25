@@ -23,7 +23,11 @@ export class SettingsScene extends Phaser.Scene {
     const PANEL_W = 520
     const PANEL_H = 360
 
-    // Panel
+    const overlay = this.add.graphics()
+    overlay.fillStyle(0x000000, 0.8)
+    overlay.fillRect(0, 0, width, height)
+    overlay.setDepth(-1)
+
     const panel = this.add.graphics()
     panel.fillStyle(0x111f2b, 0.95)
     panel.fillRoundedRect(PANEL_LEFT, PANEL_TOP, PANEL_W, PANEL_H, 14)
@@ -175,7 +179,8 @@ export class SettingsScene extends Phaser.Scene {
     const reset = this.add.text(PANEL_LEFT + PANEL_W - 90, PANEL_TOP + PANEL_H - 40, 'Сбросить', TEXT_STYLE_BUTTON)
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
-
+    reset.on('pointerover', () => reset.setColor('#a29bfe'))
+    reset.on('pointerout', () => reset.setColor('#ffffff'))
     reset.on('pointerdown', () => {
       this.bindings = {
         left: 'ArrowLeft',
@@ -188,7 +193,16 @@ export class SettingsScene extends Phaser.Scene {
       renderDirection()
     })
 
+    const fromPause = (this.scene.settings.data as { fromPause?: boolean }).fromPause ?? false
     const back = this.add.text(PANEL_LEFT + 90, PANEL_TOP + PANEL_H - 40, 'Назад', TEXT_STYLE_BUTTON).setOrigin(0.5).setInteractive({ useHandCursor: true })
-    back.on('pointerdown', () => this.scene.start('MenuScene'))
+    back.on('pointerover', () => back.setColor('#a29bfe'))
+    back.on('pointerout', () => back.setColor('#ffffff'))
+    back.on('pointerdown', () => {
+      if (fromPause) this.scene.stop('SettingsScene')
+      else {
+        this.scene.stop('SettingsScene')
+        this.scene.bringToTop('MenuScene')
+      }
+    })
   }
 }

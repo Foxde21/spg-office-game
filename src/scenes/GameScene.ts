@@ -58,6 +58,42 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on('locationChanged', this.onLocationChanged, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('itemAdded', this.onItemAdded, this)
+    this.events.on('resume', this.applySettingsFromStorage, this)
+  }
+
+  private applySettingsFromStorage() {
+    this.moveInput.left = false
+    this.moveInput.right = false
+    this.moveInput.up = false
+    this.moveInput.down = false
+
+    const stored = localStorage.getItem('bindings')
+    const defaults = {
+      left: 'ArrowLeft',
+      right: 'ArrowRight',
+      up: 'ArrowUp',
+      down: 'ArrowDown'
+    }
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { left?: string; right?: string; up?: string; down?: string }
+        this.moveBindings = {
+          left: parsed.left || defaults.left,
+          right: parsed.right || defaults.right,
+          up: parsed.up || defaults.up,
+          down: parsed.down || defaults.down
+        }
+      } catch {}
+    }
+    const savedVol = localStorage.getItem('volume')
+    if (savedVol) {
+      const vol = parseFloat(savedVol)
+      if (!isNaN(vol)) {
+        try {
+          if ((this.sound as any)?.setVolume) (this.sound as any).setVolume(vol)
+        } catch {}
+      }
+    }
   }
 
   private onQuestCompleted() {
@@ -342,6 +378,15 @@ export class GameScene extends Phaser.Scene {
       if (code === this.moveBindings.up) this.moveInput.up = false
       if (code === this.moveBindings.down) this.moveInput.down = false
     })
+
+    const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    escKey.on('down', () => {
+      if (this.scene.isPaused('GameScene')) return
+      this.scene.pause('GameScene')
+      this.scene.pause('UIScene')
+      this.scene.launch('PauseScene')
+      this.scene.bringToTop('PauseScene')
+    })
   }
 
   private setupCamera() {
@@ -432,5 +477,6 @@ export class GameScene extends Phaser.Scene {
 
   shutdown() {
     this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.events.off('resume', this.applySettingsFromStorage, this)
   }
 }
