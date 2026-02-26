@@ -111,7 +111,15 @@ export class MultiplayerManager {
 
     this.currentLocation = startLocation
 
-    const serverUrl = import.meta.env.VITE_WEBSOCKET_URL || 'http://localhost:3001'
+    let serverUrl = import.meta.env.VITE_WEBSOCKET_URL
+    
+    if (!serverUrl || serverUrl.includes('0.0.0.0')) {
+      const host = window.location.hostname
+      const port = 3001
+      serverUrl = `http://${host}:${port}`
+    }
+
+    console.log(`[Multiplayer] Connecting to: ${serverUrl}`)
 
     this.socket = io(serverUrl, {
       reconnection: true,
