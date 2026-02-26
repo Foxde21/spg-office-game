@@ -15,7 +15,7 @@ import { LocationManager } from './managers/LocationManager'
 import { SaveManager } from './managers/Save'
 
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
+  type: typeof window !== 'undefined' && (window as any).USE_CANVAS_RENDERER ? Phaser.CANVAS : Phaser.AUTO,
   width: 1280,
   height: 720,
   parent: 'game-container',

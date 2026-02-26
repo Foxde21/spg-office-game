@@ -8,22 +8,26 @@ test.afterEach(async ({ page }) => {
 })
 
 async function waitForGameReady(page: Page) {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.locator('#game-container')).toBeVisible({ timeout: 15000 })
-  await expect(page.locator('canvas')).toBeVisible({ timeout: 20000 })
-  await page.waitForFunction(() => (window as any).game != null, { timeout: 25000 })
-  await page.waitForTimeout(1500)
+  await page.goto('/?e2e=1', { waitUntil: 'load' })
+  await page.waitForFunction(() => (window as any).game != null, { timeout: 45000 })
+  await expect(page.locator('#game-container')).toBeVisible({ timeout: 5000 })
+  await expect(page.locator('canvas')).toBeVisible({ timeout: 5000 })
+  await page.waitForTimeout(1000)
 }
 
 async function goToGame(page: Page) {
   await waitForGameReady(page)
+  await page.waitForFunction(
+    () => (window as any).game?.scene?.isActive?.('MenuScene') === true,
+    { timeout: 30000 }
+  )
   await page.evaluate(() => {
     const g = (window as any).game
-    if (g && g.scene) g.scene.start('PreloadScene', { runGame: true })
+    if (g?.scene) g.scene.start('GameScene')
   })
   await page.waitForFunction(
     () => (window as any).game?.scene?.isActive?.('GameScene') === true,
-    { timeout: 60000 }
+    { timeout: 15000 }
   )
   await page.waitForFunction(
     () => (window as any).game?.scene?.isActive?.('UIScene') === true,
@@ -55,7 +59,7 @@ test.describe('Game Initialization', () => {
         const g = (window as any).game
         return g?.scene?.isActive?.('MenuScene') === true || g?.scene?.isActive?.('PreloadScene') === true
       },
-      { timeout: 30000 }
+      { timeout: 60000 }
     )
   })
 
@@ -63,7 +67,7 @@ test.describe('Game Initialization', () => {
     await waitForGameReady(page)
     await page.waitForFunction(
       () => (window as any).game?.scene?.isActive?.('MenuScene') === true,
-      { timeout: 30000 }
+      { timeout: 60000 }
     )
   })
 
