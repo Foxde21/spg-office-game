@@ -123,6 +123,10 @@ export class GameStateManager {
     this.state.player.name = name
   }
 
+  getPlayerName(): string {
+    return this.state.player.name
+  }
+
   setState(state: GameState): void {
     this.state = state
   }

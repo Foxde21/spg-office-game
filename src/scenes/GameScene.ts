@@ -7,6 +7,7 @@ import { InventoryManager } from '../managers/Inventory'
 import { LocationManager } from '../managers/LocationManager'
 import { SaveManager } from '../managers/Save'
 import { GameStateManager } from '../managers/GameState'
+import { MultiplayerManager } from '../managers/Multiplayer'
 import { STARTING_POSITION } from '../data/locations'
 import type { LocationData, ItemData } from '../types'
 
@@ -25,6 +26,8 @@ export class GameScene extends Phaser.Scene {
   private locationManager!: LocationManager
   private saveManager!: SaveManager
   private gameState!: GameStateManager
+  private multiplayerManager!: MultiplayerManager
+  private isLocalPlayer = true
 
   constructor() {
     super({ key: 'GameScene' })
@@ -35,6 +38,7 @@ export class GameScene extends Phaser.Scene {
     this.locationManager = LocationManager.getInstance(this.game)
     this.saveManager = SaveManager.getInstance(this.game)
     this.gameState = GameStateManager.getInstance(this.game)
+    this.multiplayerManager = MultiplayerManager.getInstance(this.game)
     
     this.decorColliders = this.physics.add.staticGroup()
     this.createPlayer()
@@ -53,6 +57,38 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on('locationChanged', this.onLocationChanged, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('itemAdded', this.onItemAdded, this)
+
+    this.initMultiplayer()
+  }
+
+  private initMultiplayer() {
+    const playerName = this.gameState.getPlayerName() || 'Player'
+    const playerSprite = 'player'
+    const location = this.locationManager.getCurrentLocation()
+
+    this.multiplayerManager.connect(
+      playerName,
+      playerSprite,
+      location,
+      this.player.x,
+      this.player.y
+    )
+
+    this.game.events.on('remotePlayerJoined', this.onRemotePlayerJoined, this)
+    this.game.events.on('remotePlayerLeft', this.onRemotePlayerLeft, this)
+    this.game.events.on('multiplayerError', this.onMultiplayerError, this)
+  }
+
+  private onRemotePlayerJoined(playerInfo: any) {
+    console.log(`Remote player joined: ${playerInfo.name}`)
+  }
+
+  private onRemotePlayerLeft(data: any) {
+    console.log(`Remote player left: ${data.id}`)
+  }
+
+  private onMultiplayerError(data: any) {
+    console.warn('Multiplayer error:', data.message)
   }
 
   private onQuestCompleted() {
@@ -411,8 +447,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   update() {
-    if (this.player) {
+    if (this.player && this.isLocalPlayer) {
       this.player.update(this.cursors)
+
+      if (this.multiplayerManager.isConnected()) {
+        this.multiplayerManager.sendPosition(this.player.x, this.player.y)
+      }
+    }
+
+    if (this.multiplayerManager.isConnected()) {
+      this.multiplayerManager.updateRemotePlayersView()
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.interactKey)) {
@@ -472,6 +516,10 @@ export class GameScene extends Phaser.Scene {
   private onLocationChanged(data: { spawnPosition: { x: number; y: number }; locationData: LocationData }) {
     this.player.setPosition(data.spawnPosition.x, data.spawnPosition.y)
     this.loadLocation(data.locationData)
+
+    if (this.multiplayerManager.isConnected()) {
+      this.multiplayerManager.sendLocationChange(data.locationData.id)
+    }
   }
 
   private pickupItem(item: Item) {
@@ -492,5 +540,8 @@ export class GameScene extends Phaser.Scene {
 
   shutdown() {
     this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('remotePlayerJoined', this.onRemotePlayerJoined, this)
+    this.game.events.off('remotePlayerLeft', this.onRemotePlayerLeft, this)
+    this.game.events.off('multiplayerError', this.onMultiplayerError, this)
   }
 }
