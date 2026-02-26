@@ -5,15 +5,32 @@ import { createServer } from 'http'
 import { Server as SocketIOServer } from 'socket.io'
 import { aiRouter } from './routes/ai.js'
 import { setupMultiplayer } from './multiplayer.js'
+import { networkInterfaces } from 'os'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.SERVER_PORT || 3001
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000'
+
+const corsOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  process.env.CLIENT_URL
+]
+
+const interfaces = networkInterfaces()
+for (const name of Object.keys(interfaces)) {
+  const ifaces = interfaces[name]
+  if (!ifaces) continue
+  for (const iface of ifaces) {
+    if (iface.family === 'IPv4' && !iface.internal) {
+      corsOrigins.push(`http://${iface.address}:3000`)
+    }
+  }
+}
 
 app.use(cors({
-  origin: CLIENT_URL
+  origin: corsOrigins
 }))
 app.use(express.json())
 
@@ -26,14 +43,34 @@ app.get('/health', (_req, res) => {
 const httpServer = createServer(app)
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: CLIENT_URL,
+    origin: corsOrigins,
     methods: ['GET', 'POST']
   }
 })
 
 setupMultiplayer(io)
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
+httpServer.listen(PORT, '0.0.0.0', () => {
+  const interfaces = networkInterfaces()
+  const addresses: string[] = []
+  
+  for (const name of Object.keys(interfaces)) {
+    const ifaces = interfaces[name]
+    if (!ifaces) continue
+    for (const iface of ifaces) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        addresses.push(iface.address)
+      }
+    }
+  }
+  
+  console.log(`Server running on:`)
+  console.log(`  - http://localhost:${PORT}`)
+  addresses.forEach(addr => {
+    console.log(`  - http://${addr}:${PORT}`)
+  })
   console.log(`WebSocket ready at ws://localhost:${PORT}`)
+  addresses.forEach(addr => {
+    console.log(`  - ws://${addr}:${PORT}`)
+  })
 })
