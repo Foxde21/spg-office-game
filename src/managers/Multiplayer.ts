@@ -2,6 +2,12 @@ import Phaser from 'phaser'
 import { io, type Socket } from 'socket.io-client'
 import type { PlayerInfo } from '../../server/multiplayer'
 
+declare global {
+  interface ImportMeta {
+    env: Record<string, string>
+  }
+}
+
 export class RemotePlayer extends Phaser.GameObjects.Container {
   private sprite: Phaser.GameObjects.Sprite
   private nameLabel: Phaser.GameObjects.Text
@@ -131,10 +137,12 @@ export class MultiplayerManager {
     })
 
     this.socket.on('players:list', (players: PlayerInfo[]) => {
+      console.log(`[Multiplayer] Received players list:`, players)
       this.createRemotePlayersFromList(players)
     })
 
     this.socket.on('player:joined', (playerInfo: PlayerInfo) => {
+      console.log(`[Multiplayer] Player joined:`, playerInfo)
       if (playerInfo.id !== this.playerId) {
         this.createRemotePlayer(playerInfo)
         this.game.events.emit('remotePlayerJoined', playerInfo)
@@ -241,6 +249,7 @@ export class MultiplayerManager {
   private createRemotePlayersFromList(players: PlayerInfo[]): void {
     players.forEach((playerInfo) => {
       if (playerInfo.id !== this.playerId && playerInfo.location === this.currentLocation) {
+        console.log(`[Multiplayer] Creating remote player from list:`, playerInfo)
         this.createRemotePlayer(playerInfo)
       }
     })
@@ -249,12 +258,23 @@ export class MultiplayerManager {
   private createRemotePlayer(playerInfo: PlayerInfo): void {
     if (this.remotePlayers.has(playerInfo.id)) return
 
-    const scenes = this.game.scene.getScenes(false)
-    const scene = scenes[0]
-    if (!scene) return
+    const gameScene = this.game.scene.getScene('GameScene') as Phaser.Scene | undefined
+    const isSceneActive = gameScene && this.game.scene.isActive('GameScene')
+    
+    console.log(`[Multiplayer] Creating remote player - Scene check:`, { 
+      sceneExists: !!gameScene, 
+      sceneActive: isSceneActive,
+      playerId: playerInfo.id 
+    })
+    
+    if (!gameScene || !isSceneActive) {
+      console.warn(`[Multiplayer] Cannot create remote player - scene not active`)
+      return
+    }
 
-    const remotePlayer = new RemotePlayer(scene, playerInfo)
+    const remotePlayer = new RemotePlayer(gameScene, playerInfo)
     this.remotePlayers.set(playerInfo.id, remotePlayer)
+    console.log(`[Multiplayer] Remote player created:`, playerInfo.name)
   }
 
   clear(): void {
