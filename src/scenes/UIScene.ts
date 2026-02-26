@@ -566,39 +566,19 @@ export class UIScene extends Phaser.Scene {
     this.updateBars()
   }
 
-  private onCareerLevelUp() {
+  private onCareerLevelUp(data: { level: string }) {
     this.updateBars()
+    if (data.level === 'lead') {
+      this.scene.stop('GameScene')
+      this.scene.stop('UIScene')
+      this.scene.start('VictoryScene')
+    }
   }
 
   private onGameOver(data: { reason: string }) {
-    this.scene.pause('GameScene')
-    
-    const overlay = this.add.graphics()
-    overlay.fillStyle(0x000000, 0.8)
-    overlay.fillRect(0, 0, 1280, 720)
-
-    const reasonText = data.reason === 'burnout' 
-      ? 'Вы выгорели и уволились...' 
-      : 'Game Over'
-
-    this.add.text(640, 340, reasonText, {
-      fontSize: '32px',
-      color: '#e17055',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-
-    this.add.text(640, 400, 'Нажмите R для перезапуска', {
-      fontSize: '18px',
-      color: '#ffffff',
-    }).setOrigin(0.5)
-
-    this.input.keyboard!.once('keydown-R', () => {
-      this.gameState.reset()
-      this.inventory.clear()
-      this.questManager.clear()
-      this.scene.restart()
-      this.scene.start('GameScene')
-    })
+    this.scene.stop('GameScene')
+    this.scene.stop('UIScene')
+    this.scene.start('GameOverScene', { reason: data.reason })
   }
 
   private createDialogueBox() {
