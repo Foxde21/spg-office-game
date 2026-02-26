@@ -105,7 +105,7 @@ export class MultiplayerManager {
 
     this.currentLocation = startLocation
 
-    const serverUrl = process.env.VITE_WEBSOCKET_URL || 'http://localhost:3001'
+    const serverUrl = import.meta.env.VITE_WEBSOCKET_URL || 'http://localhost:3001'
 
     this.socket = io(serverUrl, {
       reconnection: true,
