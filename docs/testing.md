@@ -29,7 +29,9 @@ tests/
 └── unit/
     ├── GameState.test.ts   # Тесты состояния игры
     ├── Inventory.test.ts   # Тесты инвентаря
-    └── Quest.test.ts       # Тесты квестов
+    ├── Quest.test.ts       # Тесты квестов
+    ├── CareerPaths.test.ts # Реестр карьерных путей и структура AI_CAREER_PATH
+    └── ...                 # Остальные unit-тесты
 ```
 
 ### Запуск
@@ -114,6 +116,10 @@ class MockGame {
 - Завершение квеста
 - Прогресс квеста
 - Награды за квест
+
+**Career Paths (данные и реестр):**
+- `getCareerPath(id)` / `getAllCareerPaths()` — возврат путей и структура
+- `AI_CAREER_PATH` — 4 уровня, 8 доменов, 12 вопросов ML Fundamentals, форма вопросов и вариантов ответа
 
 ## E2E тесты (Playwright)
 

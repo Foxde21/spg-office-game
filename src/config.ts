@@ -12,6 +12,15 @@ export const COLORS = {
   danger: 0xe17055,
 }
 
+export const DEFAULT_CAREER_PATH_UNLOCK_RESPECT = 20
+
+export const ASSESSMENT_SCORING = {
+  excellent: { minScore: 80, respect: 3, stress: -2 },
+  good: { minScore: 50, respect: 1, stress: 0 },
+  poor: { minScore: 25, respect: 0, stress: 3 },
+  fail: { minScore: 0, respect: -2, stress: 5 }
+} as const
+
 export const CAREER_LEVELS = [
   { id: 'junior', title: 'Junior Developer', stress: 0, respect: 0 },
   { id: 'middle', title: 'Middle Developer', stress: 30, respect: 25 },

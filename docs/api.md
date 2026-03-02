@@ -227,6 +227,31 @@ class DialogueManager {
 }
 ```
 
+## Career Paths (реестр и данные)
+
+Типы в `src/types/assessment.ts`, данные в `src/data/careerPaths/`.
+
+### Реестр
+
+```typescript
+import { getCareerPath, getAllCareerPaths } from '../data/careerPaths'
+
+getAllCareerPaths(): CareerPath[]   // Все зарегистрированные пути
+getCareerPath(id: string): CareerPath | undefined  // Путь по id ('ai', ...)
+```
+
+### Основные типы
+
+- **CareerPath** — id, name, description, icon, levels[], domains[], npcAssessors[], unlockCondition?, finalQuestId?
+- **CareerPathLevel** — id, title, minAvgScore, minDomainScore
+- **CompetencyDomain** — id, name, description, icon, careerPathId, topics[], unlockCondition?
+- **CompetencyTopic** — id, name, level, questions[]
+- **AssessmentQuestion** — id, scenario, question, choices[], explanation, domainId, difficulty (1–4)
+- **AssessmentChoice** — id, text, score (0–100), feedback, competencyTags[]
+- **AssessmentSession**, **SessionResult**, **DomainProgress**, **CareerPathProgress** — для сессий и прогресса
+
+Константы в `config.ts`: `DEFAULT_CAREER_PATH_UNLOCK_RESPECT`, `ASSESSMENT_SCORING` (excellent/good/poor/fail).
+
 ## Типы данных
 
 ### GameState

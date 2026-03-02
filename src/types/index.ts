@@ -110,4 +110,5 @@ export interface SaveData {
 }
 
 export * from './ai'
+export * from './assessment'
 export * from './Location'
