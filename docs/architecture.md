@@ -36,22 +36,22 @@ spg-office-game/
 │   ├── types/              # TypeScript типы
 │   │   ├── index.ts
 │   │   ├── ai.ts           # NPCPersonality, AIContext, AIResponse
-│   │   ├── assessment.ts   # CareerPath, CompetencyDomain, AssessmentQuestion (планируется)
+│   │   ├── assessment.ts   # CareerPath, CompetencyDomain, AssessmentQuestion, Session types
 │   │   ├── achievements.ts # Achievement, AchievementProgress (планируется)
 │   │   └── Location.ts     # LocationId, LocationData, DoorData
 │   ├── data/               # Конфигурационные данные
 │   │   ├── locations.ts    # Данные локаций (Open Space, Kitchen, ...)
 │   │   ├── npcPrompts.ts   # AI-личности NPC (8 персонажей)
-│   │   ├── careerPaths/    # Plugin-система карьерных путей (планируется)
-│   │   │   ├── index.ts    # Career Path Registry
-│   │   │   ├── ai.ts       # AI Track (первый)
-│   │   │   ├── engineering.ts
-│   │   │   ├── product.ts
-│   │   │   ├── design.ts
-│   │   │   ├── qa.ts
-│   │   │   ├── analytics.ts
-│   │   │   ├── hr.ts
-│   │   │   └── management.ts
+│   │   ├── careerPaths/    # Plugin-система карьерных путей
+│   │   │   ├── index.ts    # Реестр: getCareerPath(), getAllCareerPaths()
+│   │   │   ├── ai.ts       # AI_CAREER_PATH (4 уровня, 8 доменов, ML Fundamentals 12 вопросов)
+│   │   │   ├── engineering.ts  # (задача 026)
+│   │   │   ├── product.ts  # (задача 027)
+│   │   │   ├── design.ts  # (задача 027)
+│   │   │   ├── qa.ts      # (задача 028)
+│   │   │   ├── analytics.ts   # (задача 028)
+│   │   │   ├── hr.ts      # (задача 028)
+│   │   │   └── management.ts  # (будущее)
 │   │   └── miniGames/      # Данные мини-игр (планируется)
 │   ├── scenes/             # Игровые сцены
 │   │   ├── BootScene.ts
@@ -219,10 +219,10 @@ UIScene.renderDialogue()
 
 ```
 src/data/careerPaths/
-├── index.ts          # Registry: registerCareerPath(), getCareerPath(), getAllCareerPaths()
-├── ai.ts             # AI_CAREER_PATH: levels, domains, npcAssessors
-├── engineering.ts    # ENGINEERING_CAREER_PATH
-├── product.ts        # PRODUCT_CAREER_PATH
+├── index.ts          # CAREER_PATHS[], getCareerPath(id), getAllCareerPaths()
+├── ai.ts             # AI_CAREER_PATH: 4 уровня, 8 доменов, ML Fundamentals 12 вопросов
+├── engineering.ts    # (задача 026)
+├── product.ts        # (задача 027)
 └── ...               # Каждый файл экспортирует CareerPath
 ```
 
@@ -230,7 +230,7 @@ src/data/careerPaths/
 
 1. Создать `src/data/careerPaths/<name>.ts`
 2. Экспортировать `const <NAME>_CAREER_PATH: CareerPath`
-3. В `index.ts`: `registerCareerPath(<NAME>_CAREER_PATH)`
+3. В `index.ts`: добавить в массив `CAREER_PATHS`
 4. Готово — путь появится в выборе, ассесменты и Skill Tree заработают автоматически
 
 ## Система ассесментов
