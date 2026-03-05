@@ -98,6 +98,7 @@ export interface SessionAnswer {
 export interface AssessmentSession {
   careerPathId: string
   domainId: string
+  assessorNpcId?: string
   questions: AssessmentQuestion[]
   currentIndex: number
   answers: SessionAnswer[]

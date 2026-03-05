@@ -52,6 +52,7 @@ npm run test:all      # Все тесты
 - **[Ассеты](./docs/assets.md)** — требования к графике и звуку
 - **[Разработка](./docs/contributing.md)** — workflow, стайлгайд
 - **[Тестирование](./docs/testing.md)** — Vitest + Playwright
+- **[Skill Matrices](./docs/spg-skill-matrix/)** — экспорт матриц навыков для Skill Insights
 
 ## Бэклог
 

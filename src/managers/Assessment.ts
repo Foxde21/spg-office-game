@@ -99,7 +99,11 @@ export class AssessmentManager {
     return this.careerPath?.id
   }
 
-  startAssessmentSession(domainId: string, count?: number): AssessmentSession {
+  startAssessmentSession(
+    domainId: string,
+    count?: number,
+    assessorNpcId?: string
+  ): AssessmentSession {
     const careerPathId = this.careerPath?.id
     if (!careerPathId || !this.state.careerPathProgress) {
       throw new Error('Career path is not set')
@@ -124,6 +128,7 @@ export class AssessmentManager {
     this.currentSession = {
       careerPathId,
       domainId,
+      assessorNpcId,
       questions,
       currentIndex: 0,
       answers: [],
@@ -133,6 +138,7 @@ export class AssessmentManager {
     this.emit('assessmentSessionStarted', {
       careerPathId,
       domainId,
+      assessorNpcId,
       count: questions.length
     })
 
@@ -176,6 +182,8 @@ export class AssessmentManager {
 
     const careerPathId = progressState.careerPathId
     const domainId = question.domainId
+    const assessorNpcId =
+      this.currentSession?.domainId === domainId ? this.currentSession.assessorNpcId : undefined
     const domainProgress = progressState.domainProgress[domainId] || {
       domainId,
       score: 0,
@@ -214,8 +222,11 @@ export class AssessmentManager {
     this.emit('assessmentAnswered', {
       careerPathId,
       questionId,
+      choiceId,
       score: answerScore,
-      domainId
+      domainId,
+      assessorNpcId,
+      competencyTags: choice.competencyTags
     })
 
     this.emit('domainProgressChanged', {

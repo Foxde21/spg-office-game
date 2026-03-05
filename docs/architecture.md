@@ -52,6 +52,14 @@ spg-office-game/
 │   │   │   ├── analytics.ts   # (задача 028)
 │   │   │   ├── hr.ts      # (задача 028)
 │   │   │   └── management.ts  # (будущее)
+│   │   ├── skillMatrices/  # Матрицы навыков для Skill Insights
+│   │   │   ├── index.ts    # Реестр матриц + mapping npcId -> matrix
+│   │   │   ├── softwareDev.ts
+│   │   │   ├── qa.ts
+│   │   │   ├── ba.ts
+│   │   │   ├── product.ts
+│   │   │   ├── design.ts
+│   │   │   └── ...
 │   │   └── miniGames/      # Данные мини-игр (планируется)
 │   ├── scenes/             # Игровые сцены
 │   │   ├── BootScene.ts
@@ -78,6 +86,7 @@ spg-office-game/
 │   │   ├── Save.ts
 │   │   ├── AIDialogue.ts
 │   │   ├── Assessment.ts    # Ассесменты (планируется)
+│   │   ├── SkillInsights.ts # Skill Insights по competencyTags
 │   │   ├── Multiplayer.ts   # WebSocket клиент (планируется)
 │   │   └── Achievement.ts   # Достижения (планируется)
 │   ├── ui/                 # UI компоненты (планируется)
@@ -247,10 +256,26 @@ Singleton, career-path-agnostic:
 ### Phaser-события
 
 ```
-assessmentAnswered    → { careerPathId, questionId, score, domainId }
+assessmentSessionStarted   → { careerPathId, domainId, assessorNpcId?, count }
+assessmentAnswered         → { careerPathId, questionId, choiceId, score, domainId, assessorNpcId?, competencyTags }
 domainProgressChanged → { careerPathId, domainId, oldScore, newScore }
 careerLevelUp         → { careerPathId, oldLevel, newLevel }
+assessmentSessionCompleted → SessionResult
+skillInsight               → SkillInsight
 ```
+
+## Skill Insights
+
+Skill Insights — мини-инсайты после каждого ответа ассесмента. Источник данных — `competencyTags` в `AssessmentChoice`.
+
+Компоненты:
+- `src/data/skillMatrices/` — реестр матриц и mapping `npcId -> matrix`.
+- `SkillInsightsManager` — слушает `assessmentAnswered`, обновляет EMA по тегам и эмитит `skillInsight`.
+
+Добавление новой матрицы:
+1. Добавить `.md` в `docs/spg-skill-matrix/`.
+2. Добавить `SkillMatrix` в `src/data/skillMatrices/<name>.ts`.
+3. Зарегистрировать в `src/data/skillMatrices/index.ts` и замаппить `npcId -> matrix`.
 
 ## Mini-Game Framework
 
