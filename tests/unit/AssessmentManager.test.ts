@@ -100,6 +100,30 @@ describe('AssessmentManager', () => {
     expect(next).toBeNull()
   })
 
+  it('startAssessmentSession creates a session with 3-5 questions and emits event', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const session = manager.startAssessmentSession('ml-fundamentals', 3)
+    expect(session.careerPathId).toBe('ai')
+    expect(session.domainId).toBe('ml-fundamentals')
+    expect(session.questions).toHaveLength(3)
+
+    const ids = session.questions.map((q: any) => q.id)
+    expect(new Set(ids).size).toBe(ids.length)
+
+    expect(mockGame.events.emit).toHaveBeenCalledWith(
+      'assessmentSessionStarted',
+      expect.objectContaining({ careerPathId: 'ai', domainId: 'ml-fundamentals', count: 3 })
+    )
+  })
+
   it('submitAnswer updates domain score and affects stress/respect', async () => {
     vi.resetModules()
     const mockGame = createMockGame()
@@ -241,5 +265,27 @@ describe('AssessmentManager', () => {
     const q2 = manager2.getNextQuestion('ml-fundamentals')
     expect(q2).toBeTruthy()
     expect(q2.id).not.toBe(q1.id)
+  })
+
+  it('reset clears chosen career path and progress', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const before = manager.getAssessmentState()
+    expect(before.chosenCareerPathId).toBe('ai')
+    expect(before.careerPathProgress).toBeDefined()
+
+    manager.reset()
+
+    const after = manager.getAssessmentState()
+    expect(after.chosenCareerPathId).toBeUndefined()
+    expect(after.careerPathProgress).toBeUndefined()
+    expect(manager.getCareerPath()).toBeNull()
   })
 })
