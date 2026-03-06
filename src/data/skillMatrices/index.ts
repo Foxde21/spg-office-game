@@ -13,30 +13,18 @@ export const SKILL_MATRICES: SkillMatrix[] = [
   DESIGN_SKILL_MATRIX
 ]
 
+const NPC_TO_SKILL_MATRIX: Partial<Record<string, SkillMatrix>> = {
+  'petya-senior': SOFTWARE_DEV_SKILL_MATRIX,
+  'masha-qa': QA_SKILL_MATRIX,
+  'igor-analyst': BA_SKILL_MATRIX,
+  'olga-product': PRODUCT_SKILL_MATRIX,
+  'lesha-designer': DESIGN_SKILL_MATRIX
+}
+
 export function getSkillMatrix(id: string): SkillMatrix | undefined {
   return SKILL_MATRICES.find((m) => m.id === id)
 }
 
 export function getSkillMatrixForNpc(npcId: string): SkillMatrix | undefined {
-  if (npcId === 'petya-senior') {
-    return SOFTWARE_DEV_SKILL_MATRIX
-  }
-
-  if (npcId === 'masha-qa') {
-    return QA_SKILL_MATRIX
-  }
-
-  if (npcId === 'igor-analyst') {
-    return BA_SKILL_MATRIX
-  }
-
-  if (npcId === 'olga-product') {
-    return PRODUCT_SKILL_MATRIX
-  }
-
-  if (npcId === 'lesha-designer') {
-    return DESIGN_SKILL_MATRIX
-  }
-
-  return undefined
+  return NPC_TO_SKILL_MATRIX[npcId]
 }

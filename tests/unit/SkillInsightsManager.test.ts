@@ -58,8 +58,8 @@ describe('SkillInsightsManager', () => {
       competencyTags: ['documentation']
     })
 
-    expect(manager.getTagCount('documentation')).toBe(1)
-    expect(manager.getTagScore('documentation')).toBeCloseTo(4)
+    expect(manager.getTagCount('software-dev', 'documentation')).toBe(1)
+    expect(manager.getTagScore('software-dev', 'documentation')).toBeCloseTo(4)
 
     const skillInsightCalls = (mockGame.events.emit as any).mock.calls.filter(
       (c: any[]) => c[0] === 'skillInsight'
@@ -245,7 +245,7 @@ describe('SkillInsightsManager', () => {
       competencyTags: ['unknown-tag']
     })
 
-    expect(manager.getTagCount('unknown-tag')).toBe(0)
+    expect(manager.getTagCount('software-dev', 'unknown-tag')).toBe(0)
 
     const skillInsightCalls = (mockGame.events.emit as any).mock.calls.filter(
       (c: any[]) => c[0] === 'skillInsight'

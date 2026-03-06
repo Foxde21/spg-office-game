@@ -1,12 +1,11 @@
 import Phaser from 'phaser'
 
 import { getSkillMatrixForNpc } from '../data/skillMatrices'
+import type { SkillMatrix, SkillMatrixLevelId } from '../data/skillMatrices/softwareDev'
 
 function clampScore(value: number): number {
   return Math.min(100, Math.max(0, value))
 }
-
-type SkillLevelId = 'junior' | 'middle' | 'senior' | 'expert'
 
 interface AssessmentAnsweredEvent {
   careerPathId: string
@@ -24,8 +23,8 @@ export interface SkillInsight {
   tag: string
   title: string
   score: number
-  level: SkillLevelId
-  nextLevel?: SkillLevelId
+  level: SkillMatrixLevelId
+  nextLevel?: SkillMatrixLevelId
   currentExpectation: string
   nextExpectation?: string
 }
@@ -49,12 +48,16 @@ export class SkillInsightsManager {
     return SkillInsightsManager.instance
   }
 
-  getTagScore(tag: string): number {
-    return this.tagScores.get(tag) ?? 0
+  private getKey(matrixId: string, tag: string): string {
+    return `${matrixId}:${tag}`
   }
 
-  getTagCount(tag: string): number {
-    return this.tagCounts.get(tag) ?? 0
+  getTagScore(matrixId: string, tag: string): number {
+    return this.tagScores.get(this.getKey(matrixId, tag)) ?? 0
+  }
+
+  getTagCount(matrixId: string, tag: string): number {
+    return this.tagCounts.get(this.getKey(matrixId, tag)) ?? 0
   }
 
   clear(): void {
@@ -75,26 +78,29 @@ export class SkillInsightsManager {
     for (const tag of tags) {
       if (!matrix.items[tag]) continue
 
-      const oldScore = this.tagScores.get(tag) ?? 0
-      const newScore = clampScore(oldScore * 0.8 + clampScore(e.score) * 0.2)
-      this.tagScores.set(tag, newScore)
+      const key = this.getKey(matrix.id, tag)
 
-      const oldCount = this.tagCounts.get(tag) ?? 0
-      this.tagCounts.set(tag, oldCount + 1)
+      const oldScore = this.tagScores.get(key) ?? 0
+      const newScore = clampScore(oldScore * 0.8 + clampScore(e.score) * 0.2)
+      this.tagScores.set(key, newScore)
+
+      const oldCount = this.tagCounts.get(key) ?? 0
+      this.tagCounts.set(key, oldCount + 1)
     }
 
-    const insight = this.buildInsight(e.assessorNpcId, matrix.id)
+    const insight = this.buildInsight(e.assessorNpcId, matrix)
     if (!insight) return
 
     this.game.events.emit('skillInsight', insight)
   }
 
-  private buildInsight(npcId: string, matrixId: string): SkillInsight | null {
-    const matrix = getSkillMatrixForNpc(npcId)
-    if (!matrix) return null
-
+  private buildInsight(npcId: string, matrix: SkillMatrix): SkillInsight | null {
     const scored = Object.keys(matrix.items)
-      .map((tag) => ({ tag, score: this.tagScores.get(tag), count: this.tagCounts.get(tag) }))
+      .map((tag) => {
+        const key = this.getKey(matrix.id, tag)
+
+        return { tag, score: this.tagScores.get(key), count: this.tagCounts.get(key) }
+      })
       .filter((x) => (x.count ?? 0) > 0 && x.score !== undefined) as Array<{
       tag: string
       score: number
@@ -112,7 +118,7 @@ export class SkillInsightsManager {
 
     return {
       npcId,
-      matrixId,
+      matrixId: matrix.id,
       tag: weakest.tag,
       title: item.title,
       score: weakest.score,
@@ -123,14 +129,14 @@ export class SkillInsightsManager {
     }
   }
 
-  private getLevelId(score: number): SkillLevelId {
+  private getLevelId(score: number): SkillMatrixLevelId {
     if (score < 50) return 'junior'
     if (score < 70) return 'middle'
     if (score < 85) return 'senior'
     return 'expert'
   }
 
-  private getNextLevelId(level: SkillLevelId): SkillLevelId | undefined {
+  private getNextLevelId(level: SkillMatrixLevelId): SkillMatrixLevelId | undefined {
     if (level === 'junior') return 'middle'
     if (level === 'middle') return 'senior'
     if (level === 'senior') return 'expert'
