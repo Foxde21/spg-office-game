@@ -76,6 +76,60 @@ game.events.emit('gameSaved', gameState: GameState)
 game.events.emit('gameLoaded', gameState: GameState)
 ```
 
+#### Ассесменты и Skill Insights
+
+```typescript
+// Начата ассесмент-сессия
+game.events.emit('assessmentSessionStarted', {
+  careerPathId: string,
+  domainId: string,
+  assessorNpcId?: string,
+  count: number
+})
+
+// Ответ на вопрос ассесмента
+game.events.emit('assessmentAnswered', {
+  careerPathId: string,
+  questionId: string,
+  choiceId: string,
+  score: number,
+  domainId: string,
+  assessorNpcId?: string,
+  competencyTags: string[]
+})
+
+// Изменение прогресса домена
+game.events.emit('domainProgressChanged', {
+  careerPathId: string,
+  domainId: string,
+  oldScore: number,
+  newScore: number
+})
+
+// Повышение уровня в рамках карьерного пути
+game.events.emit('careerLevelUp', {
+  careerPathId: string,
+  oldLevel: string,
+  newLevel: string
+})
+
+// Завершение ассесмент-сессии
+game.events.emit('assessmentSessionCompleted', result: SessionResult)
+
+// Мини-инсайт после ответа (SkillInsightsManager)
+game.events.emit('skillInsight', {
+  npcId: string,
+  matrixId: string,
+  tag: string,
+  title: string,
+  score: number,
+  level: 'junior' | 'middle' | 'senior' | 'expert',
+  nextLevel?: 'junior' | 'middle' | 'senior' | 'expert',
+  currentExpectation: string,
+  nextExpectation?: string
+})
+```
+
 ## Менеджеры (Managers)
 
 ### GameStateManager
@@ -110,6 +164,22 @@ class GameStateManager {
   // Проверки
   isGameOver(): boolean
   canPromote(): boolean
+}
+```
+
+### SkillInsightsManager
+
+Считает EMA по `competencyTags` из события `assessmentAnswered` и эмитит `skillInsight`.
+
+```typescript
+class SkillInsightsManager {
+  private static instance: SkillInsightsManager
+
+  static getInstance(): SkillInsightsManager
+
+  getTagScore(tag: string): number
+  getTagCount(tag: string): number
+  clear(): void
 }
 ```
 
