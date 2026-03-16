@@ -242,6 +242,38 @@ src/data/careerPaths/
 3. В `index.ts`: добавить в массив `CAREER_PATHS`
 4. Готово — путь появится в выборе, ассесменты и Skill Tree заработают автоматически
 
+## Выбор карьерного пути (dialogue-driven)
+
+Выбор пути происходит через scripted-диалоги NPC (не через отдельное меню).
+
+### Хранение состояния
+
+- `GameState.player.careerPath?: string` — выбранный путь (например, `ai`)
+- `GameState.flags.careerPathChosen: boolean` — выбран ли путь
+
+### Триггер диалогов выбора
+
+`NPC.getDialogue()` выбирает стартовый диалог на основе состояния:
+
+- При `respect >= 20` и `careerPathChosen === false`:
+  - если у NPC есть диалог с id `career-choice-*`, он будет использован как `startId`
+- При `careerPathChosen === true` и `careerPath` задан:
+  - если у NPC есть диалог `career-react-<careerPath>`, он будет использован как `startId`
+
+### Действия в DialogueChoice (UIScene)
+
+UIScene обрабатывает `DialogueChoice.action` (несколько действий разделяются `;`):
+
+- `setFlag:<flagId>`
+- `setCareerPath:<pathId>`
+- `describeCareerPaths` — показать инфо-экран со списком доступных путей
+- `openCareerPathsSelect` — открыть экран выбора путей
+
+Для раскрытия списка путей используется placeholder-выбор:
+
+- `showCareerPathsSelect`
+- `showCareerPathsSelectResume` (вариант с возобновлением исходного диалога)
+
 ## Система ассесментов
 
 ### AssessmentManager

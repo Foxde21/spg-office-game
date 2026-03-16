@@ -41,14 +41,14 @@ describe('UIScene career paths', () => {
 
     const original = [
       { text: 'A' },
-      { text: 'Show', action: 'showCareerPaths' },
+      { text: 'Show', action: 'showCareerPathsSelect' },
       { text: 'B' }
     ]
 
     const expanded = scene.expandCareerPathsChoices(original)
 
     expect(expanded.map((c: any) => c.text)).toEqual(['A', 'Web', 'AI', 'Secret', 'Quested', 'B'])
-    expect(expanded.some((c: any) => c.action === 'showCareerPaths')).toBe(false)
+    expect(expanded.some((c: any) => c.action === 'showCareerPathsSelect')).toBe(false)
     expect(expanded[1].action).toBe('setFlag:careerPathChosen;setCareerPath:web')
     expect(expanded[2].action).toBe('setFlag:careerPathChosen;setCareerPath:ai')
   })
@@ -79,7 +79,7 @@ describe('UIScene career paths', () => {
       isQuestCompleted: vi.fn().mockReturnValue(false)
     }
 
-    const original = [{ text: 'Show', action: 'showCareerPaths' }]
+    const original = [{ text: 'Show', action: 'showCareerPathsSelect' }]
     const expanded = scene.expandCareerPathsChoices(original)
 
     expect(expanded.map((c: any) => c.text)).toEqual(['Web'])

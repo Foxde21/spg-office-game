@@ -57,8 +57,17 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
                 text: 'Твоя первая задача — найди документацию по проекту. Она в кабинете директора.',
                 choices: [
                   { text: 'Понял, иду искать!', nextDialogue: 'accepted', startQuest: 'find-documentation', respectChange: 5 },
-                  { text: 'А можно поподробнее?', nextDialogue: 'details', stressChange: -5 },
+                  { text: 'А где искать?', nextDialogue: 'details' },
                 ],
+              },
+            ],
+          },
+          {
+            id: 'career-react-ai',
+            lines: [
+              {
+                speaker: 'Тим Лид',
+                text: 'AI? Круто. Тогда давай договоримся: сначала понимание задачи и данных, потом модели. И без магии — только измеримые улучшения.',
               },
             ],
           },
@@ -131,14 +140,28 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
                 text: 'Ну так что?',
                 choices: [
                   {
-                    text: 'Покажи варианты',
-                    action: 'showCareerPaths'
+                    text: 'Мне интересен AI — хочу разбираться в машинном обучении',
+                    action: 'setFlag:careerPathChosen;setCareerPath:ai',
+                    nextDialogue: 'career-choice-ai-confirm'
+                  },
+                  {
+                    text: 'Посмотреть другие пути',
+                    action: 'describeCareerPaths'
                   },
                   {
                     text: 'Пока не определился...',
                     nextDialogue: 'career-choice-undecided'
                   }
                 ],
+              },
+            ],
+          },
+          {
+            id: 'career-choice-ai-confirm',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'О, вот это по-взрослому. AI — отличный выбор. Мне нравится. Давай, я тебе помогу собрать нормальный маршрут — без суеты и без выгорания.',
               },
             ],
           },
@@ -154,14 +177,23 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
                 text: 'С AI сейчас проще всего набрать вес. Это не про хайп — это про то, что тебя начинают слушать. Хочешь, покажу, куда можно зайти?',
                 choices: [
                   {
-                    text: 'Давай, покажи варианты',
-                    action: 'showCareerPaths'
+                    text: 'Посмотреть другие пути',
+                    action: 'describeCareerPaths'
                   },
                   {
                     text: 'Не сейчас, потом',
-                    nextDialogue: 'petya-intro'
+                    nextDialogue: 'career-choice-later'
                   }
                 ],
+              },
+            ],
+          },
+          {
+            id: 'career-choice-later',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Окей. Только не тяни: выберешь направление — и качаться будет проще. Созреешь — подходи.',
               },
             ],
           },

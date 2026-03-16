@@ -11,12 +11,12 @@
 - [x] Определены необходимые ресурсы/ассеты
 
 ## Definition of Done (DOD)
-- [ ] Код написан и работает
-- [ ] Код соответствует стайлгайду
-- [ ] Функционал протестирован вручную
-- [ ] Нет консольных ошибок
-- [ ] Документация обновлена (если требуется)
-- [ ] Код прошел ревью (если требуется)
+- [x] Код написан и работает
+- [x] Код соответствует стайлгайду
+- [x] Функционал протестирован вручную
+- [x] Нет консольных ошибок
+- [x] Документация обновлена (если требуется)
+- [x] Код прошел ревью (если требуется)
 
 ## Критерии приемки
 1. При respect >= 20 у NPC появляются диалоги о выборе карьерного пути
@@ -28,6 +28,22 @@
 7. Повышение по грейду зависит от AssessmentManager (не от respect)
 8. AI-путь работает: выбор через Петю Сеньора, грейды AI Junior → AI Architect
 9. Стресс по-прежнему влияет на Game Over
+
+## Проверка (тесты)
+
+### Unit (Vitest)
+
+- `tests/unit/NPCDialogue.test.ts` — выбор `career-choice-*` / `career-react-<pathId>` по состоянию.
+- `tests/unit/UISceneCareerPaths.test.ts` — раскрытие placeholder-выбора `showCareerPathsSelect*` в список путей из реестра с учётом unlockCondition.
+- `tests/unit/GameState.test.ts` — хранение `careerPath` и флага `careerPathChosen`.
+
+### E2E (Playwright)
+
+- `e2e/careerPaths.spec.ts` — сценарии:
+  - стартовые реплики при начальном respect
+  - набор respect до 20
+  - диалог с Петей и выбор AI
+  - реакция Тимлида `career-react-ai`
 
 ## Технические детали
 
@@ -116,6 +132,14 @@ export const CAREER_PATH_UNLOCK_RESPECT = 20
 Добавить в `DialogueChoice.action` поддержку:
 - `setCareerPath:<pathId>` — устанавливает карьерный путь
 - Примеры: `setCareerPath:ai`, `setCareerPath:engineering`, `setCareerPath:product`
+
+Дополнительно используются действия:
+- `describeCareerPaths` — показать список доступных путей (инфо-экран)
+- `openCareerPathsSelect` — открыть диалог выбора путей
+
+Placeholder-выборы, которые раскрываются в список путей:
+- `showCareerPathsSelect`
+- `showCareerPathsSelectResume`
 
 ### Обратная совместимость
 

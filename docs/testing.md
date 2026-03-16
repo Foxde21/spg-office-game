@@ -127,7 +127,9 @@ class MockGame {
 
 ```
 e2e/
-└── game.spec.ts    # Тесты геймплея
+├── helpers.ts          # Общие хелперы для e2e (goToGame, startNpcDialogue, ...)
+├── game.spec.ts        # Базовые тесты геймплея
+└── careerPaths.spec.ts # Флоу выбора карьерного пути (Петя -> AI -> реакция Тимлида)
 ```
 
 ### Запуск

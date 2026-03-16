@@ -18,6 +18,7 @@ export class UIScene extends Phaser.Scene {
   private availableDialogues: Dialogue[] = []
   private currentLineIndex = 0
   private aiDialogueData: { npcId: string; name: string } | null = null
+  private scriptedNpc: { npcId: string; name: string; role: string } | null = null
   private gameState!: GameStateManager
   private inventory!: InventoryManager
   private questManager!: QuestManager
@@ -58,6 +59,9 @@ export class UIScene extends Phaser.Scene {
   private currentChoices: DialogueChoice[] = []
 
   private queuedDialoguePack: { dialogues: Dialogue[]; startId?: string } | null = null
+  private queuedDialogueState:
+    | { dialogue: Dialogue; lineIndex: number; availableDialogues: Dialogue[] }
+    | null = null
 
   private getCareerReactionLine(
     npcId: string,
@@ -85,19 +89,149 @@ export class UIScene extends Phaser.Scene {
     return `${npcName}: ${careerPathName} — принято. Посмотрим, как ты раскроешься.`
   }
 
+  private injectShowCareerPathsChoice(choices: DialogueChoice[]): DialogueChoice[] {
+    if (this.currentDialogue?.id.startsWith('career-paths-')) {
+      return choices
+    }
+
+    if (choices.some((c) => c.action === 'describeCareerPaths')) {
+      return choices
+    }
+
+    if (!this.currentDialogue) {
+      return choices
+    }
+
+    if (this.currentDialogue.id.startsWith('career-choice-')) {
+      return [
+        {
+          text: 'Посмотреть другие пути',
+          action: 'describeCareerPaths'
+        },
+        ...choices
+      ]
+    }
+
+    const careerPathChosen = Boolean(this.gameState.getFlag('careerPathChosen'))
+    const respect = this.gameState.getRespect()
+    if (careerPathChosen || respect < 20) {
+      return choices
+    }
+
+    if (!this.scriptedNpc) {
+      return choices
+    }
+
+    const hasCareerDialogue = this.availableDialogues.some((d) => d.id.startsWith('career-choice-'))
+    if (hasCareerDialogue) {
+      return choices
+    }
+
+    return [
+      {
+        text: 'Посмотреть другие пути',
+        action: 'describeCareerPaths'
+      },
+      ...choices
+    ]
+  }
+
+  private showCareerPathsInfo() {
+    if (!this.currentDialogue || !this.scriptedNpc) return
+
+    const all = getAllCareerPaths()
+    const unlocked = all.filter((p) => this.isCareerPathUnlocked(p))
+    const listText = unlocked
+      .map((p) => `${p.name}: ${p.description}`)
+      .join('\n')
+
+    this.queuedDialogueState = {
+      dialogue: this.currentDialogue,
+      lineIndex: this.currentLineIndex,
+      availableDialogues: this.availableDialogues,
+    }
+
+    const npcCareerChoices: DialogueChoice[] = []
+    if (this.scriptedNpc.npcId === 'petya-senior') {
+      npcCareerChoices.push({
+        text: 'Выбрать AI-путь',
+        action: 'resumeDialogueTo:career-choice-ai-confirm;setFlag:careerPathChosen;setCareerPath:ai'
+      })
+
+      npcCareerChoices.push({
+        text: 'Пока не определился...',
+        action: 'resumeDialogueTo:career-choice-later'
+      })
+
+    } else {
+      npcCareerChoices.push({
+        text: 'Пока не определился...',
+        action: 'resumeDialogueTo:career-choice-undecided'
+      })
+    }
+
+    const infoDialogue: Dialogue = {
+      id: 'career-paths-info',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: unlocked.length > 0 ? `Смотри, что сейчас доступно:\n${listText}` : 'Пока нет доступных путей.',
+          choices: unlocked.length > 0 ? npcCareerChoices : undefined
+        }
+      ]
+    }
+
+    this.availableDialogues = [infoDialogue]
+    this.currentDialogue = infoDialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private showCareerPathsSelect() {
+    if (!this.scriptedNpc) return
+
+    const selectDialogue: Dialogue = {
+      id: 'career-paths-select',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: 'Выбирай путь:',
+          choices: [
+            {
+              text: '...',
+              action: 'showCareerPathsSelectResume'
+            }
+          ]
+        }
+      ]
+    }
+
+    this.availableDialogues = [selectDialogue]
+    this.currentDialogue = selectDialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
   constructor() {
     super({ key: 'UIScene' })
   }
 
   private expandCareerPathsChoices(choices: DialogueChoice[]): DialogueChoice[] {
-    const idx = choices.findIndex((c) => c.action === 'showCareerPaths')
+    const idx = choices.findIndex(
+      (c) => c.action === 'showCareerPathsSelect' || c.action === 'showCareerPathsSelectResume'
+    )
     if (idx < 0) return choices
+
+    const placeholder = choices[idx]
+    const withResume = placeholder?.action === 'showCareerPathsSelectResume'
 
     const careerPaths = getAllCareerPaths()
     const unlocked = careerPaths.filter((p) => this.isCareerPathUnlocked(p))
     const pathChoices: DialogueChoice[] = unlocked.map((p) => ({
       text: p.name,
-      action: `setFlag:careerPathChosen;setCareerPath:${p.id}`,
+      action: withResume
+        ? `resumeDialogue;setFlag:careerPathChosen;setCareerPath:${p.id}`
+        : `setFlag:careerPathChosen;setCareerPath:${p.id}`,
     }))
 
     const before = choices.slice(0, idx)
@@ -702,6 +836,8 @@ export class UIScene extends Phaser.Scene {
       wordWrap: { width: boxWidth - 48 },
     })
 
+    this.dialogueText.setLineSpacing(6)
+
     this.choicesContainer = this.add.container(-boxWidth / 2 + 20, -boxHeight / 2 + 140)
 
     const inputHtml = `
@@ -743,6 +879,7 @@ export class UIScene extends Phaser.Scene {
       this.availableDialogues = []
       this.aiConversationHistory = []
       this.queuedDialoguePack = null
+      this.scriptedNpc = null
       this.speakerText.setText(data.name)
       this.dialogueText.setText('Привет! Чем могу помочь?')
       this.choicesContainer.removeAll(true)
@@ -754,11 +891,16 @@ export class UIScene extends Phaser.Scene {
       this.isAIMode = false
       this.aiDialogueData = null
       this.queuedDialoguePack = null
+      this.scriptedNpc = null
 
       const pack = data as
         | Dialogue
         | { dialogues: Dialogue[]; startId?: string }
         | { npcId: string; name: string; role: string; dialogues: Dialogue[]; startId?: string }
+
+      if ('dialogues' in pack && 'npcId' in pack && pack.npcId) {
+        this.scriptedNpc = { npcId: pack.npcId, name: pack.name, role: pack.role }
+      }
 
       if ('dialogues' in pack && 'npcId' in pack && pack.npcId) {
         const careerPathId = this.gameState.getCareerPath()
@@ -834,6 +976,17 @@ export class UIScene extends Phaser.Scene {
 
     const line = this.currentDialogue.lines[this.currentLineIndex]
     if (!line) {
+      if (this.queuedDialogueState) {
+        const state = this.queuedDialogueState
+        this.queuedDialogueState = null
+        this.availableDialogues = state.availableDialogues
+        this.currentDialogue = state.dialogue
+        this.currentLineIndex = state.lineIndex
+        this.showCurrentLine()
+
+        return
+      }
+
       if (this.queuedDialoguePack) {
         const pack = this.queuedDialoguePack
         this.queuedDialoguePack = null
@@ -862,7 +1015,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private showChoices(choices: DialogueChoice[]) {
-    const expandedChoices = this.expandCareerPathsChoices(choices)
+    const injectedChoices = this.injectShowCareerPathsChoice(choices)
+    const expandedChoices = this.expandCareerPathsChoices(injectedChoices)
     const validChoices = expandedChoices.filter((choice) => this.checkChoiceCondition(choice))
     this.currentChoices = validChoices
     this.selectedChoiceIndex = 0
@@ -1008,9 +1162,68 @@ export class UIScene extends Phaser.Scene {
     }
 
     if (choice.action) {
+      let actionStr = choice.action
+      let actionParts = actionStr
+        .split(';')
+        .map((a) => a.trim())
+        .filter(Boolean)
+
+      if (actionParts.includes('openCareerPathsSelect')) {
+        this.showCareerPathsSelect()
+
+        return
+      }
+
+      const resumeTo = actionParts.find((a) => a.startsWith('resumeDialogueTo:'))
+      const shouldResume = actionParts.includes('resumeDialogue')
+
+      if ((resumeTo || shouldResume) && this.queuedDialogueState) {
+        const state = this.queuedDialogueState
+        this.queuedDialogueState = null
+        this.availableDialogues = state.availableDialogues
+        this.currentDialogue = state.dialogue
+        this.currentLineIndex = state.lineIndex
+
+        let resumedToSpecificDialogue = false
+
+        if (resumeTo) {
+          const dialogueId = resumeTo.slice('resumeDialogueTo:'.length)
+          const next = dialogueId ? this.findDialogue(dialogueId) : null
+          if (next) {
+            this.currentDialogue = next
+            this.currentLineIndex = 0
+            resumedToSpecificDialogue = true
+          }
+        }
+
+        const remaining = actionParts.filter((a) => a !== 'resumeDialogue' && !a.startsWith('resumeDialogueTo:'))
+        if (remaining.length === 0) {
+          if (resumedToSpecificDialogue) {
+            this.currentLineIndex = 0
+          }
+          this.showCurrentLine()
+
+          return
+        }
+
+        if (resumedToSpecificDialogue) {
+          this.currentLineIndex = -1
+        }
+
+        actionStr = remaining.join(';')
+        actionParts = remaining
+        choice = { ...choice, action: actionStr }
+      }
+
+      if (actionParts.includes('describeCareerPaths')) {
+        this.showCareerPathsInfo()
+
+        return
+      }
+
       let careerChanged = false
       let careerToastText: string | null = null
-      const actions = choice.action
+      const actions = actionStr
         .split(';')
         .map((a) => a.trim())
         .filter(Boolean)
@@ -1100,6 +1313,8 @@ export class UIScene extends Phaser.Scene {
     this.aiConversationHistory = []
     this.inputField.setVisible(false)
     this.queuedDialoguePack = null
+    this.queuedDialogueState = null
+    this.scriptedNpc = null
     this.scene.get('GameScene').scene.resume()
   }
 

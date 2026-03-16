@@ -115,6 +115,29 @@ describe('GameStateManager', () => {
     })
   })
 
+  describe('career path', () => {
+    it('should store and return careerPath', () => {
+      expect(gameState.getCareerPath()).toBeUndefined()
+      gameState.setCareerPath('ai')
+      expect(gameState.getCareerPath()).toBe('ai')
+    })
+  })
+
+  describe('flags', () => {
+    it('should set and read flags with default false', () => {
+      expect(gameState.getFlag('careerPathChosen')).toBe(false)
+      gameState.setFlag('careerPathChosen')
+      expect(gameState.getFlag('careerPathChosen')).toBe(true)
+    })
+
+    it('should allow setting a flag to false', () => {
+      gameState.setFlag('careerPathChosen')
+      expect(gameState.getFlag('careerPathChosen')).toBe(true)
+      gameState.setFlag('careerPathChosen', false)
+      expect(gameState.getFlag('careerPathChosen')).toBe(false)
+    })
+  })
+
   describe('game over', () => {
     it('should detect game over at 100 stress', () => {
       gameState.addStress(100)

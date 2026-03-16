@@ -1,55 +1,17 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import {
+  canvasClickAt,
+  destroyGame,
+  goToGame,
+  movePlayerTo,
+  pressKey,
+  startNpcDialogue,
+  waitForGameReady,
+} from './helpers'
 
 test.afterEach(async ({ page }) => {
-  await page.evaluate(() => {
-    const g = (window as any).game
-    if (g && typeof g.destroy === 'function') g.destroy(true)
-  }).catch(() => {})
+  await destroyGame(page)
 })
-
-async function waitForGameReady(page: Page) {
-  await page.goto('/?e2e=1', { waitUntil: 'load' })
-  await page.waitForFunction(() => (window as any).game != null, { timeout: 45000 })
-  await expect(page.locator('#game-container')).toBeVisible({ timeout: 5000 })
-  await expect(page.locator('canvas')).toBeVisible({ timeout: 5000 })
-  await page.waitForTimeout(1000)
-}
-
-async function goToGame(page: Page) {
-  await waitForGameReady(page)
-  await page.waitForFunction(
-    () => (window as any).game?.scene?.isActive?.('MenuScene') === true,
-    { timeout: 30000 }
-  )
-  await page.evaluate(() => {
-    const g = (window as any).game
-    if (g?.scene) g.scene.start('GameScene')
-  })
-  await page.waitForFunction(
-    () => (window as any).game?.scene?.isActive?.('GameScene') === true,
-    { timeout: 15000 }
-  )
-  await page.waitForFunction(
-    () => (window as any).game?.scene?.isActive?.('UIScene') === true,
-    { timeout: 10000 }
-  )
-  await page.waitForTimeout(800)
-}
-
-async function canvasClickAt(page: Page, gameX: number, gameY: number) {
-  const pos = await page.evaluate(
-    ({ x, y }) => {
-      const canvas = document.querySelector('canvas')
-      if (!canvas) return null
-      const rect = canvas.getBoundingClientRect()
-      const scaleX = rect.width / 1280
-      const scaleY = rect.height / 720
-      return { x: rect.left + x * scaleX, y: rect.top + y * scaleY }
-    },
-    { x: gameX, y: gameY }
-  )
-  if (pos) await page.mouse.click(pos.x, pos.y)
-}
 
 test.describe('Game Initialization', () => {
   test('should load the game', async ({ page }) => {
@@ -141,21 +103,8 @@ test.describe('Inventory System', () => {
 test.describe('NPC Interaction', () => {
   test('should interact with NPC', async ({ page }) => {
     await goToGame(page)
-    await page.evaluate(() => {
-      const g = (window as any).game
-      const scene = g?.scene?.getScene('GameScene')
-      const player = scene?.player
-      if (player) {
-        player.x = 532
-        player.y = 320
-      }
-    })
-    await page.waitForTimeout(300)
-    await page.keyboard.press('e')
-    await page.waitForFunction(
-      () => (window as any).game?.scene?.isPaused?.('GameScene') === true,
-      { timeout: 10000 }
-    )
+    await movePlayerTo(page, 532, 320)
+    await startNpcDialogue(page)
   })
 })
 
@@ -168,17 +117,8 @@ test.describe('Item Pickup', () => {
       if (loc) loc.changeLocation('kitchen', 100, 360)
     })
     await page.waitForTimeout(500)
-    await page.evaluate(() => {
-      const g = (window as any).game
-      const scene = g?.scene?.getScene('GameScene')
-      const player = scene?.player
-      if (player) {
-        player.x = 640
-        player.y = 398
-      }
-    })
-    await page.waitForTimeout(200)
-    await page.keyboard.press('e')
+    await movePlayerTo(page, 640, 398)
+    await pressKey(page, 'e')
     await page.waitForTimeout(300)
     const items = await page.evaluate(() => (window as any).game?.registry?.get('inventory')?.getAllItems?.() ?? [])
     const hasCoffee = items.some((it: { name?: string }) => it?.name === 'Кофе')
@@ -189,21 +129,8 @@ test.describe('Item Pickup', () => {
 test.describe('Quest System', () => {
   test('should start quest from dialogue', async ({ page }) => {
     await goToGame(page)
-    await page.evaluate(() => {
-      const g = (window as any).game
-      const scene = g?.scene?.getScene('GameScene')
-      const player = scene?.player
-      if (player) {
-        player.x = 532
-        player.y = 320
-      }
-    })
-    await page.waitForTimeout(300)
-    await page.keyboard.press('e')
-    await page.waitForFunction(
-      () => (window as any).game?.scene?.isPaused?.('GameScene') === true,
-      { timeout: 10000 }
-    )
+    await movePlayerTo(page, 532, 320)
+    await startNpcDialogue(page)
     await page.waitForTimeout(200)
     await page.keyboard.press('Space')
     await page.waitForTimeout(400)
