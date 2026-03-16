@@ -91,7 +91,7 @@ export class GameScene extends Phaser.Scene {
       const vol = parseFloat(savedVol)
       if (!isNaN(vol)) {
         try {
-          if ((this.sound as any)?.setVolume) (this.sound as any).setVolume(vol)
+          this.sound.volume = vol
         } catch {}
       }
     }

@@ -59,13 +59,20 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
 
     let startId = this.dialogues[0]?.id
 
-    const game = (this.scene as any)?.game
-    const gameState = game?.registry?.get ? game.registry.get('gameState') : undefined
-    const respect = typeof gameState?.getRespect === 'function' ? gameState.getRespect() : 0
+    const game = this.scene.game
+    const gameState = typeof game.registry?.get === 'function' ? (game.registry.get('gameState') as unknown) : undefined
+    const respect =
+      gameState && typeof (gameState as { getRespect?: unknown }).getRespect === 'function'
+        ? (gameState as { getRespect: () => number }).getRespect()
+        : 0
     const careerPathChosen =
-      typeof gameState?.getFlag === 'function' ? Boolean(gameState.getFlag('careerPathChosen')) : false
+      gameState && typeof (gameState as { getFlag?: unknown }).getFlag === 'function'
+        ? Boolean((gameState as { getFlag: (id: string) => unknown }).getFlag('careerPathChosen'))
+        : false
     const careerPath =
-      typeof gameState?.getCareerPath === 'function' ? (gameState.getCareerPath() as string | undefined) : undefined
+      gameState && typeof (gameState as { getCareerPath?: unknown }).getCareerPath === 'function'
+        ? ((gameState as { getCareerPath: () => unknown }).getCareerPath() as string | undefined)
+        : undefined
 
     if (respect >= 20 && !careerPathChosen) {
       const careerChoice = this.dialogues.find((d) => d.id.startsWith('career-choice-'))

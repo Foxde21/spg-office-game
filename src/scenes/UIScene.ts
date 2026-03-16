@@ -531,14 +531,13 @@ export class UIScene extends Phaser.Scene {
 
   private getCareerTitle(): { title: string } {
     const pathId = this.gameState.getCareerPath()
-    if (pathId && (this.game as any).registry?.get) {
-      const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
-        | { getCurrentLevel: () => { title: string } | null }
-        | undefined
-
-      const level = assessment?.getCurrentLevel?.()
-      if (level?.title) {
-        return { title: level.title }
+    if (pathId && typeof this.game.registry?.get === 'function') {
+      const assessment = this.game.registry.get('assessmentManager') as unknown
+      if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+        const level = (assessment as { getCurrentLevel: () => { title: string } | null }).getCurrentLevel()
+        if (level?.title) {
+          return { title: level.title }
+        }
       }
     }
 
@@ -1245,23 +1244,25 @@ export class UIScene extends Phaser.Scene {
             const path = getAllCareerPaths().find((p) => p.id === pathId)
             careerToastText = `Карьерный путь выбран: ${path?.name || pathId}`
 
-            if ((this.game as any).registry?.get) {
-              const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
-                | {
-                    setCareerPath: (id: string) => void
-                    getCurrentLevel: () => { id: string } | null
-                    getAssessmentState: () => unknown
-                  }
-                | undefined
-
-              assessment?.setCareerPath?.(pathId)
-              const level = assessment?.getCurrentLevel?.()
-              if (level?.id) {
-                this.gameState.setCareerLevel(level.id)
+            if (typeof this.game.registry?.get === 'function') {
+              const assessment = this.game.registry.get('assessmentManager') as unknown
+              if (assessment && typeof (assessment as { setCareerPath?: unknown }).setCareerPath === 'function') {
+                ;(assessment as { setCareerPath: (id: string) => void }).setCareerPath(pathId)
               }
 
-              if (assessment?.getAssessmentState) {
-                this.gameState.setAssessmentState(assessment.getAssessmentState() as any)
+              if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+                const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
+                if (level?.id) {
+                  this.gameState.setCareerLevel(level.id)
+                }
+              }
+
+              if (
+                assessment &&
+                typeof (assessment as { getAssessmentState?: unknown }).getAssessmentState === 'function'
+              ) {
+                const state = (assessment as { getAssessmentState: () => unknown }).getAssessmentState()
+                this.gameState.setAssessmentState(state as import('../types/assessment').AssessmentState)
               }
             }
           }

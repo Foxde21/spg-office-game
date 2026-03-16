@@ -120,12 +120,17 @@ export class GameStateManager {
   }
 
   canPromote(): boolean {
-    if (this.state.player.careerPath && (this.game as any).registry?.get) {
-      const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
-        | { canLevelUp: () => boolean }
-        | undefined
-
-      return assessment?.canLevelUp?.() ?? false
+    if (this.state.player.careerPath) {
+      const regGet = this.game.registry?.get
+      if (typeof regGet === 'function') {
+        const assessment = this.game.registry.get('assessmentManager') as unknown
+        if (
+          assessment &&
+          typeof (assessment as { canLevelUp?: unknown }).canLevelUp === 'function'
+        ) {
+          return (assessment as { canLevelUp: () => boolean }).canLevelUp()
+        }
+      }
     }
 
     const currentLevel = this.getCareerLevel()
@@ -141,12 +146,14 @@ export class GameStateManager {
   }
 
   promote(): boolean {
-    if (this.state.player.careerPath && (this.game as any).registry?.get) {
-      const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
-        | { promote: () => boolean }
-        | undefined
-
-      return assessment?.promote?.() ?? false
+    if (this.state.player.careerPath) {
+      const regGet = this.game.registry?.get
+      if (typeof regGet === 'function') {
+        const assessment = this.game.registry.get('assessmentManager') as unknown
+        if (assessment && typeof (assessment as { promote?: unknown }).promote === 'function') {
+          return (assessment as { promote: () => boolean }).promote()
+        }
+      }
     }
 
     if (!this.canPromote()) return false

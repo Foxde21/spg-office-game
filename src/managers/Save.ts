@@ -71,20 +71,21 @@ export class SaveManager {
         assessment: migratedData.assessment,
       })
 
-      if ((this.game as any).registry?.get) {
-        const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
-          | { loadState: (state: unknown) => void }
-          | undefined
+      const regGet = this.game.registry?.get
+      if (typeof regGet === 'function') {
+        const assessment = this.game.registry.get('assessmentManager') as unknown
+        if (
+          migratedData.assessment &&
+          assessment &&
+          typeof (assessment as { loadState?: unknown }).loadState === 'function'
+        ) {
+          ;(assessment as { loadState: (state: unknown) => void }).loadState(migratedData.assessment)
 
-        if (assessment?.loadState && migratedData.assessment) {
-          assessment.loadState(migratedData.assessment)
-
-          const a = (this.game as any).registry.get('assessmentManager') as unknown as
-            | { getCurrentLevel: () => { id: string } | null }
-            | undefined
-          const level = a?.getCurrentLevel?.()
-          if (level?.id) {
-            gameState.setCareerLevel(level.id)
+          if (typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+            const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
+            if (level?.id) {
+              gameState.setCareerLevel(level.id)
+            }
           }
         }
       }
