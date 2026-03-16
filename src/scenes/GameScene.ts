@@ -408,11 +408,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createNPCs(location: LocationData) {
-    const aiNPCIds = ['tim-lead', 'anna-hr', 'petya-senior', 'olga-product', 'lesha-designer', 'masha-qa', 'igor-analyst', 'director']
+    const aiNPCIds = ['anna-hr', 'olga-product', 'lesha-designer', 'masha-qa', 'igor-analyst', 'director']
     
     location.npcs.forEach((npcData) => {
       const animKey = npcData.sprite
-      const npcId = npcData.name.toLowerCase().replace(' ', '-').replace('ё', 'е')
+      const npcId = npcData.id
       const isAI = aiNPCIds.includes(npcId)
       
       const npc = new NPC(

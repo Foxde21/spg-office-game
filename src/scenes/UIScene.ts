@@ -7,6 +7,7 @@ import { SaveManager } from '../managers/Save'
 import { AIDialogueManager } from '../managers/AIDialogue'
 import { LocationManager } from '../managers/LocationManager'
 import { CAREER_LEVELS, COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config'
+import { getAllCareerPaths, getCareerPath } from '../data/careerPaths'
 
 export class UIScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container
@@ -14,6 +15,7 @@ export class UIScene extends Phaser.Scene {
   private speakerText!: Phaser.GameObjects.Text
   private choicesContainer!: Phaser.GameObjects.Container
   private currentDialogue: Dialogue | null = null
+  private availableDialogues: Dialogue[] = []
   private currentLineIndex = 0
   private aiDialogueData: { npcId: string; name: string } | null = null
   private gameState!: GameStateManager
@@ -55,8 +57,80 @@ export class UIScene extends Phaser.Scene {
   private selectedChoiceIndex = 0
   private currentChoices: DialogueChoice[] = []
 
+  private queuedDialoguePack: { dialogues: Dialogue[]; startId?: string } | null = null
+
+  private getCareerReactionLine(
+    npcId: string,
+    npcName: string,
+    npcRole: string,
+    careerPathName: string
+  ): string {
+    if (npcId === 'petya-senior') {
+      return `О, ты всё-таки выбрал ${careerPathName}. Норм. Тогда готовься учиться по-взрослому.`
+    }
+
+    if (npcId === 'tim-lead') {
+      return `Круто, что ты выбрал ${careerPathName}. Если захочешь — помогу разложить, что качать и как расти без выгорания.`
+    }
+
+    const roleLower = npcRole.toLowerCase()
+    if (roleLower.includes('тимлид') || roleLower.includes('team lead')) {
+      return `Принято: ${careerPathName}. Я буду смотреть на результат и стабильность — без геройства.`
+    }
+
+    if (roleLower.includes('hr') || roleLower.includes('рекрутер')) {
+      return `Класс, что ты определился: ${careerPathName}. Это помогает планировать развитие и ожидания.`
+    }
+
+    return `${npcName}: ${careerPathName} — принято. Посмотрим, как ты раскроешься.`
+  }
+
   constructor() {
     super({ key: 'UIScene' })
+  }
+
+  private expandCareerPathsChoices(choices: DialogueChoice[]): DialogueChoice[] {
+    const idx = choices.findIndex((c) => c.action === 'showCareerPaths')
+    if (idx < 0) return choices
+
+    const careerPaths = getAllCareerPaths()
+    const unlocked = careerPaths.filter((p) => this.isCareerPathUnlocked(p))
+    const pathChoices: DialogueChoice[] = unlocked.map((p) => ({
+      text: p.name,
+      action: `setFlag:careerPathChosen;setCareerPath:${p.id}`,
+    }))
+
+    const before = choices.slice(0, idx)
+    const after = choices.slice(idx + 1)
+
+    return [...before, ...pathChoices, ...after]
+  }
+
+  private isCareerPathUnlocked(path: {
+    unlockCondition?: { minRespect?: number; requiredFlag?: string; requiredQuest?: string }
+  }): boolean {
+    const unlock = path.unlockCondition
+    if (!unlock) return true
+
+    if (unlock.minRespect !== undefined) {
+      if (this.gameState.getRespect() < unlock.minRespect) {
+        return false
+      }
+    }
+
+    if (unlock.requiredFlag) {
+      if (!this.gameState.getFlag(unlock.requiredFlag)) {
+        return false
+      }
+    }
+
+    if (unlock.requiredQuest) {
+      if (!this.questManager.isQuestCompleted(unlock.requiredQuest)) {
+        return false
+      }
+    }
+
+    return true
   }
 
   create() {
@@ -94,7 +168,7 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  private showSaveMessage(text: string) {
+  private showSaveMessage(text: string, durationMs = 2000) {
     const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, text, {
       fontSize: '15px',
       color: '#00b894',
@@ -104,7 +178,7 @@ export class UIScene extends Phaser.Scene {
     msg.setDepth(300)
     msg.setOrigin(0.5)
     
-    this.time.delayedCall(2000, () => {
+    this.time.delayedCall(durationMs, () => {
       msg.destroy()
     })
   }
@@ -129,8 +203,7 @@ export class UIScene extends Phaser.Scene {
     const x = 10
     const y = this.HUD_Y + 6
 
-    const careerLevel = this.gameState.getCareerLevel()
-    const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
+    const { title } = this.getCareerTitle()
 
     const badge = this.add.graphics()
     badge.fillStyle(COLORS.primary, 0.3)
@@ -139,7 +212,7 @@ export class UIScene extends Phaser.Scene {
     badge.strokeRoundedRect(x, y, this.SECTION_W - 5, 22, 4)
     badge.setDepth(51)
 
-    this.statusText = this.add.text(x + 10, y + 4, `⭐  ${levelData?.title || 'Junior Developer'}`, {
+    this.statusText = this.add.text(x + 10, y + 4, `⭐  ${title}`, {
       fontSize: '13px',
       color: '#a29bfe',
       fontStyle: 'bold',
@@ -318,9 +391,27 @@ export class UIScene extends Phaser.Scene {
       this.stressWarning.setText('')
     }
 
+    const { title } = this.getCareerTitle()
+    this.statusText.setText(`⭐  ${title}`)
+  }
+
+  private getCareerTitle(): { title: string } {
+    const pathId = this.gameState.getCareerPath()
+    if (pathId && (this.game as any).registry?.get) {
+      const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
+        | { getCurrentLevel: () => { title: string } | null }
+        | undefined
+
+      const level = assessment?.getCurrentLevel?.()
+      if (level?.title) {
+        return { title: level.title }
+      }
+    }
+
     const careerLevel = this.gameState.getCareerLevel()
     const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
-    this.statusText.setText(`⭐  ${levelData?.title || 'Junior Developer'}`)
+
+    return { title: levelData?.title || 'Junior Developer' }
   }
 
   private createQuestPanel() {
@@ -638,12 +729,20 @@ export class UIScene extends Phaser.Scene {
     this.dialogueEnterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER)
   }
 
-  private startDialogue(data: Dialogue | { npcId: string; name: string; isAI: true }) {
+  private startDialogue(
+    data:
+      | Dialogue
+      | { npcId: string; name: string; isAI: true }
+      | { dialogues: Dialogue[]; startId?: string }
+      | { npcId: string; name: string; role: string; dialogues: Dialogue[]; startId?: string }
+  ) {
     if ('isAI' in data && data.isAI) {
       this.isAIMode = true
       this.aiDialogueData = { npcId: data.npcId, name: data.name }
       this.currentDialogue = null
+      this.availableDialogues = []
       this.aiConversationHistory = []
+      this.queuedDialoguePack = null
       this.speakerText.setText(data.name)
       this.dialogueText.setText('Привет! Чем могу помочь?')
       this.choicesContainer.removeAll(true)
@@ -654,7 +753,64 @@ export class UIScene extends Phaser.Scene {
     } else {
       this.isAIMode = false
       this.aiDialogueData = null
-      this.currentDialogue = data as Dialogue
+      this.queuedDialoguePack = null
+
+      const pack = data as
+        | Dialogue
+        | { dialogues: Dialogue[]; startId?: string }
+        | { npcId: string; name: string; role: string; dialogues: Dialogue[]; startId?: string }
+
+      if ('dialogues' in pack && 'npcId' in pack && pack.npcId) {
+        const careerPathId = this.gameState.getCareerPath()
+        if (careerPathId && pack.startId !== `career-react-${careerPathId}`) {
+          const reactedFlagId = `careerReacted:${pack.npcId}:${careerPathId}`
+          if (!this.gameState.getFlag(reactedFlagId)) {
+            this.gameState.setFlag(reactedFlagId, true)
+            const careerPath = getCareerPath(careerPathId)
+            const careerPathName = careerPath?.name || careerPathId
+
+            const npcRole = 'role' in pack ? pack.role : ''
+            const reactionText = this.getCareerReactionLine(
+              pack.npcId,
+              pack.name,
+              npcRole,
+              careerPathName
+            )
+
+            this.queuedDialoguePack = { dialogues: pack.dialogues, startId: pack.startId }
+            const reactionDialogue: Dialogue = {
+              id: 'career-react-once',
+              lines: [
+                {
+                  speaker: pack.name,
+                  text: reactionText
+                }
+              ]
+            }
+
+            this.availableDialogues = [reactionDialogue]
+            this.currentDialogue = reactionDialogue
+            this.currentLineIndex = 0
+            this.inputField.setVisible(false)
+            this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
+            this.dialogueBox.setVisible(true)
+            this.showCurrentLine()
+
+            this.dialogueAdvanceKey.on('down', this.onDialogueAdvance, this)
+            this.dialogueEscapeKey.on('down', this.endDialogue, this)
+
+            return
+          }
+        }
+      }
+
+      if ('dialogues' in pack) {
+        this.availableDialogues = pack.dialogues
+        this.currentDialogue = pack.startId ? this.findDialogue(pack.startId) : pack.dialogues[0] || null
+      } else {
+        this.availableDialogues = [pack]
+        this.currentDialogue = pack
+      }
       this.currentLineIndex = 0
       this.inputField.setVisible(false)
       this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
@@ -678,6 +834,17 @@ export class UIScene extends Phaser.Scene {
 
     const line = this.currentDialogue.lines[this.currentLineIndex]
     if (!line) {
+      if (this.queuedDialoguePack) {
+        const pack = this.queuedDialoguePack
+        this.queuedDialoguePack = null
+        this.availableDialogues = pack.dialogues
+        this.currentDialogue = pack.startId ? this.findDialogue(pack.startId) : pack.dialogues[0] || null
+        this.currentLineIndex = 0
+        this.showCurrentLine()
+
+        return
+      }
+
       this.endDialogue()
       return
     }
@@ -695,7 +862,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private showChoices(choices: DialogueChoice[]) {
-    const validChoices = choices.filter((choice) => this.checkChoiceCondition(choice))
+    const expandedChoices = this.expandCareerPathsChoices(choices)
+    const validChoices = expandedChoices.filter((choice) => this.checkChoiceCondition(choice))
     this.currentChoices = validChoices
     this.selectedChoiceIndex = 0
     this.renderChoices()
@@ -793,6 +961,18 @@ export class UIScene extends Phaser.Scene {
       }
     }
 
+    if (choice.condition.flagSet) {
+      if (!this.gameState.getFlag(choice.condition.flagSet)) {
+        return false
+      }
+    }
+
+    if (choice.condition.flagNotSet) {
+      if (this.gameState.getFlag(choice.condition.flagNotSet)) {
+        return false
+      }
+    }
+
     return true
   }
 
@@ -805,16 +985,18 @@ export class UIScene extends Phaser.Scene {
     }
 
     if (choice.startQuest) {
-      this.questManager.startQuest({
-        id: 'find-documentation',
-        title: 'Найти документацию',
-        description: 'Найдите документацию по проекту на кухне',
-        type: 'main',
-        completed: false,
-        progress: 0,
-        requiredItems: ['documentation'],
-        rewards: { respect: 20, stress: -10 },
-      })
+      if (choice.startQuest === 'find-documentation') {
+        this.questManager.startQuest({
+          id: 'find-documentation',
+          title: 'Найти документацию',
+          description: 'Найдите документацию по проекту на кухне',
+          type: 'main',
+          completed: false,
+          progress: 0,
+          requiredItems: ['documentation'],
+          rewards: { respect: 20, stress: -10 },
+        })
+      }
     }
 
     if (choice.completeQuest) {
@@ -823,6 +1005,62 @@ export class UIScene extends Phaser.Scene {
 
     if (choice.takeItem) {
       this.inventory.removeItem(choice.takeItem)
+    }
+
+    if (choice.action) {
+      let careerChanged = false
+      let careerToastText: string | null = null
+      const actions = choice.action
+        .split(';')
+        .map((a) => a.trim())
+        .filter(Boolean)
+
+      for (const action of actions) {
+        if (action.startsWith('setFlag:')) {
+          const flagId = action.slice('setFlag:'.length)
+          if (flagId) this.gameState.setFlag(flagId, true)
+        }
+
+        if (action.startsWith('setCareerPath:')) {
+          const pathId = action.slice('setCareerPath:'.length)
+          if (pathId) {
+            this.gameState.setCareerPath(pathId)
+            careerChanged = true
+
+            this.gameState.setFlag(`careerPath:${pathId}`, true)
+
+            const path = getAllCareerPaths().find((p) => p.id === pathId)
+            careerToastText = `Карьерный путь выбран: ${path?.name || pathId}`
+
+            if ((this.game as any).registry?.get) {
+              const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
+                | {
+                    setCareerPath: (id: string) => void
+                    getCurrentLevel: () => { id: string } | null
+                    getAssessmentState: () => unknown
+                  }
+                | undefined
+
+              assessment?.setCareerPath?.(pathId)
+              const level = assessment?.getCurrentLevel?.()
+              if (level?.id) {
+                this.gameState.setCareerLevel(level.id)
+              }
+
+              if (assessment?.getAssessmentState) {
+                this.gameState.setAssessmentState(assessment.getAssessmentState() as any)
+              }
+            }
+          }
+        }
+      }
+
+      if (careerChanged) {
+        this.updateBars()
+        if (careerToastText) {
+          this.showSaveMessage(careerToastText, 4000)
+        }
+      }
     }
 
     if (choice.nextDialogue && this.currentDialogue) {
@@ -840,7 +1078,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   private findDialogue(_id: string): Dialogue | null {
-    return null
+    const id = _id
+    const found = this.availableDialogues.find((d) => d.id === id)
+
+    return found || null
   }
 
   private endDialogue() {
@@ -853,10 +1094,12 @@ export class UIScene extends Phaser.Scene {
     this.currentChoices = []
     this.dialogueBox.setVisible(false)
     this.currentDialogue = null
+    this.availableDialogues = []
     this.aiDialogueData = null
     this.isAIMode = false
     this.aiConversationHistory = []
     this.inputField.setVisible(false)
+    this.queuedDialoguePack = null
     this.scene.get('GameScene').scene.resume()
   }
 
@@ -891,6 +1134,7 @@ export class UIScene extends Phaser.Scene {
     const context: AIContext = {
       playerName: 'Игрок',
       careerLevel: this.gameState.getCareerLevel(),
+      careerPath: this.gameState.getCareerPath(),
       stress: this.gameState.getStress(),
       respect: this.gameState.getRespect(),
       npcId: this.aiDialogueData.npcId,

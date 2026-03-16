@@ -39,6 +39,7 @@ export class SaveManager {
         completedQuests: questManager.getCompletedQuests(),
         npcs: gameState.getState().npcs,
         flags: gameState.getState().flags,
+        assessment: gameState.getAssessmentState(),
       }
 
       localStorage.setItem(SAVE_KEY, JSON.stringify(saveData))
@@ -67,7 +68,26 @@ export class SaveManager {
         player: migratedData.player,
         npcs: migratedData.npcs || {},
         flags: migratedData.flags || {},
+        assessment: migratedData.assessment,
       })
+
+      if ((this.game as any).registry?.get) {
+        const assessment = (this.game as any).registry.get('assessmentManager') as unknown as
+          | { loadState: (state: unknown) => void }
+          | undefined
+
+        if (assessment?.loadState && migratedData.assessment) {
+          assessment.loadState(migratedData.assessment)
+
+          const a = (this.game as any).registry.get('assessmentManager') as unknown as
+            | { getCurrentLevel: () => { id: string } | null }
+            | undefined
+          const level = a?.getCurrentLevel?.()
+          if (level?.id) {
+            gameState.setCareerLevel(level.id)
+          }
+        }
+      }
 
       inventory.clear()
       if (migratedData.inventory) {
@@ -118,6 +138,10 @@ export class SaveManager {
 
     if (!migrated.completedQuests) {
       migrated.completedQuests = []
+    }
+
+    if (!migrated.assessment) {
+      migrated.assessment = undefined
     }
 
     return migrated

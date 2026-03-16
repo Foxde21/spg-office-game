@@ -102,6 +102,80 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
           },
         ],
       },
+      {
+        id: 'petya-senior',
+        name: 'Петя Сеньор',
+        role: 'Senior Developer',
+        sprite: 'petya',
+        x: 760,
+        y: 304,
+        dialogues: [
+          {
+            id: 'petya-intro',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Ну, что, живой ещё? Если хочешь расти — расти головой, а не переработками.',
+              },
+            ],
+          },
+          {
+            id: 'career-choice-ai',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Слушай, я тут заметил — у тебя неплохо идёт. Есть один вопрос... Ты задумывался, куда хочешь расти?',
+              },
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Ну так что?',
+                choices: [
+                  {
+                    text: 'Покажи варианты',
+                    action: 'showCareerPaths'
+                  },
+                  {
+                    text: 'Пока не определился...',
+                    nextDialogue: 'career-choice-undecided'
+                  }
+                ],
+              },
+            ],
+          },
+          {
+            id: 'career-choice-undecided',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Нормально. Только смотри: если будешь "просто делать задачи" — тебя так и будут повышать по инерции. Медленно и больно.',
+              },
+              {
+                speaker: 'Петя Сеньор',
+                text: 'С AI сейчас проще всего набрать вес. Это не про хайп — это про то, что тебя начинают слушать. Хочешь, покажу, куда можно зайти?',
+                choices: [
+                  {
+                    text: 'Давай, покажи варианты',
+                    action: 'showCareerPaths'
+                  },
+                  {
+                    text: 'Не сейчас, потом',
+                    nextDialogue: 'petya-intro'
+                  }
+                ],
+              },
+            ],
+          },
+          {
+            id: 'career-react-ai',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'AI — тема мощная. Только не пытайся "впихнуть" модель туда, где хватит правила. Договорились?',
+              },
+            ],
+          },
+        ],
+      },
     ],
     items: [
       {

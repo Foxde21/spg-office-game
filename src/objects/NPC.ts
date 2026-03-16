@@ -50,11 +50,38 @@ export class NPC extends Phaser.Physics.Arcade.Sprite {
     label.setOrigin(0.5)
   }
 
-  getDialogue(): Dialogue | { npcId: string; name: string; isAI: true } {
+  getDialogue():
+    | { npcId: string; name: string; isAI: true }
+    | { npcId: string; name: string; role: string; dialogues: Dialogue[]; startId?: string } {
     if (this.isAI) {
       return { npcId: this.npcId, name: this.npcName, isAI: true }
     }
-    return this.dialogues[0]
+
+    let startId = this.dialogues[0]?.id
+
+    const game = (this.scene as any)?.game
+    const gameState = game?.registry?.get ? game.registry.get('gameState') : undefined
+    const respect = typeof gameState?.getRespect === 'function' ? gameState.getRespect() : 0
+    const careerPathChosen =
+      typeof gameState?.getFlag === 'function' ? Boolean(gameState.getFlag('careerPathChosen')) : false
+    const careerPath =
+      typeof gameState?.getCareerPath === 'function' ? (gameState.getCareerPath() as string | undefined) : undefined
+
+    if (respect >= 20 && !careerPathChosen) {
+      const careerChoice = this.dialogues.find((d) => d.id.startsWith('career-choice-'))
+      if (careerChoice) {
+        startId = careerChoice.id
+      }
+    }
+
+    if (careerPathChosen && careerPath) {
+      const reaction = this.dialogues.find((d) => d.id === `career-react-${careerPath}`)
+      if (reaction) {
+        startId = reaction.id
+      }
+    }
+
+    return { npcId: this.npcId, name: this.npcName, role: this.role, dialogues: this.dialogues, startId }
   }
 
   getName(): string {

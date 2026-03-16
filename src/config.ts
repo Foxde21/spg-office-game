@@ -14,6 +14,8 @@ export const COLORS = {
 
 export const DEFAULT_CAREER_PATH_UNLOCK_RESPECT = 20
 
+export const CAREER_PATH_UNLOCK_RESPECT = DEFAULT_CAREER_PATH_UNLOCK_RESPECT
+
 export const ASSESSMENT_SCORING = {
   excellent: { minScore: 80, respect: 3, stress: -2 },
   good: { minScore: 50, respect: 1, stress: 0 },

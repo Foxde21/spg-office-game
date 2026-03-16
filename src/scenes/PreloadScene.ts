@@ -169,6 +169,90 @@ export class PreloadScene extends Phaser.Scene {
         frameRate: 1,
       })
     }
+
+    if (!this.anims.exists('petya-idle-down')) {
+      this.anims.create({
+        key: 'petya-idle-down',
+        frames: [{ key: 'villagers', frame: 'petya-down-1' }],
+        frameRate: 1,
+      })
+    }
+
+    if (!this.anims.exists('petya-idle-up')) {
+      this.anims.create({
+        key: 'petya-idle-up',
+        frames: [{ key: 'villagers', frame: 'petya-up-1' }],
+        frameRate: 1,
+      })
+    }
+
+    if (!this.anims.exists('petya-idle-right')) {
+      this.anims.create({
+        key: 'petya-idle-right',
+        frames: [{ key: 'villagers', frame: 'petya-right-1' }],
+        frameRate: 1,
+      })
+    }
+
+    if (!this.anims.exists('petya-idle-left')) {
+      this.anims.create({
+        key: 'petya-idle-left',
+        frames: [{ key: 'villagers', frame: 'petya-right-1' }],
+        frameRate: 1,
+      })
+    }
+
+    if (!this.anims.exists('petya-walk-down')) {
+      this.anims.create({
+        key: 'petya-walk-down',
+        frames: [
+          { key: 'villagers', frame: 'petya-down-0' },
+          { key: 'villagers', frame: 'petya-down-2' },
+          { key: 'villagers', frame: 'petya-down-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
+
+    if (!this.anims.exists('petya-walk-up')) {
+      this.anims.create({
+        key: 'petya-walk-up',
+        frames: [
+          { key: 'villagers', frame: 'petya-up-0' },
+          { key: 'villagers', frame: 'petya-up-2' },
+          { key: 'villagers', frame: 'petya-up-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
+
+    if (!this.anims.exists('petya-walk-right')) {
+      this.anims.create({
+        key: 'petya-walk-right',
+        frames: [
+          { key: 'villagers', frame: 'petya-right-0' },
+          { key: 'villagers', frame: 'petya-right-2' },
+          { key: 'villagers', frame: 'petya-right-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
+
+    if (!this.anims.exists('petya-walk-left')) {
+      this.anims.create({
+        key: 'petya-walk-left',
+        frames: [
+          { key: 'villagers', frame: 'petya-right-2' },
+          { key: 'villagers', frame: 'petya-right-0' },
+          { key: 'villagers', frame: 'petya-right-1' },
+        ],
+        frameRate: 8,
+        repeat: -1,
+      })
+    }
   }
 
   private createPlaceholderAssets() {
