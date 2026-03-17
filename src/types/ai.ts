@@ -11,11 +11,12 @@ export interface NPCPersonality {
 export interface AIContext {
   playerName: string
   careerLevel: string
+  careerPath?: string
   stress: number
   respect: number
   npcId: string
   relationship: number
-  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>
+  conversationHistory: { role: 'user' | 'assistant'; content: string }[]
   previousTopics: string[]
 }
 

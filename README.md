@@ -40,6 +40,11 @@ npm run test:all      # Все тесты
 - Зарабатывать уважение команды
 - Не попасть под сокращение
 
+После того как игрок набрал достаточно уважения (respect), NPC могут предложить **выбор карьерного пути** (например, AI-путь через Петю Сеньора). Выбранный путь влияет на:
+- Отображаемый грейд в HUD
+- Логику повышения (через AssessmentManager)
+- Реакции NPC в диалогах
+
 Цель — стать Team Lead!
 
 ## Документация
@@ -53,6 +58,16 @@ npm run test:all      # Все тесты
 - **[Разработка](./docs/contributing.md)** — workflow, стайлгайд
 - **[Тестирование](./docs/testing.md)** — Vitest + Playwright
 - **[Skill Matrices](./docs/spg-skill-matrix/)** — экспорт матриц навыков для Skill Insights
+
+## Career paths (кратко)
+
+- **Условия предложения**
+  - При `respect >= 20` и пока не выбран путь (`careerPathChosen = false`) scripted NPC могут стартовать с диалогов `career-choice-*`.
+- **Выбор AI пути**
+  - Реализован через NPC `petya-senior`.
+  - Выбор сохраняется в `PlayerData.careerPath` и флаг `careerPathChosen`.
+- **Реакции NPC**
+  - После выбора пути scripted NPC могут иметь диалог `career-react-<pathId>` (например, `career-react-ai`).
 
 ## Бэклог
 

@@ -63,7 +63,7 @@ export class SettingsScene extends Phaser.Scene {
       this.volume = (nx - TRACK_LEFT) / TRACK_W
       localStorage.setItem('volume', this.volume.toFixed(3))
       volumeLabel.setText(Math.round(this.volume * 100) + '%')
-      try { if ((this.sound as any)?.setVolume) (this.sound as any).setVolume(this.volume) } catch {}
+      try { this.sound.volume = this.volume } catch {}
     })
     volumeLabel.setText(Math.round(this.volume * 100) + '%')
 

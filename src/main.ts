@@ -14,9 +14,17 @@ import { QuestManager } from './managers/Quest'
 import { LocationManager } from './managers/LocationManager'
 import { SaveManager } from './managers/Save'
 import { SkillInsightsManager } from './managers/SkillInsights'
+import { AssessmentManager } from './managers/Assessment'
+
+declare global {
+  interface Window {
+    USE_CANVAS_RENDERER?: boolean
+    game?: Phaser.Game
+  }
+}
 
 const config: Phaser.Types.Core.GameConfig = {
-  type: typeof window !== 'undefined' && (window as any).USE_CANVAS_RENDERER ? Phaser.CANVAS : Phaser.AUTO,
+  type: typeof window !== 'undefined' && window.USE_CANVAS_RENDERER ? Phaser.CANVAS : Phaser.AUTO,
   width: 1280,
   height: 720,
   parent: 'game-container',
@@ -39,11 +47,12 @@ const config: Phaser.Types.Core.GameConfig = {
 }
 
 const game = new Phaser.Game(config)
-if (typeof window !== 'undefined') (window as any).game = game
+if (typeof window !== 'undefined') window.game = game
 const gameState = GameStateManager.getInstance(game)
 const inventory = InventoryManager.getInstance(game)
 const questManager = QuestManager.getInstance(game)
 const locationManager = LocationManager.getInstance(game)
+const assessmentManager = AssessmentManager.getInstance(game)
 SaveManager.getInstance(game)
 SkillInsightsManager.getInstance(game)
 if (typeof game.registry !== 'undefined') {
@@ -51,4 +60,5 @@ if (typeof game.registry !== 'undefined') {
   game.registry.set('inventory', inventory)
   game.registry.set('questManager', questManager)
   game.registry.set('locationManager', locationManager)
+  game.registry.set('assessmentManager', assessmentManager)
 }

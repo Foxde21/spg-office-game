@@ -381,6 +381,23 @@ export class AssessmentManager {
     return avg >= next.minAvgScore && allDomainsAboveMin
   }
 
+  promote(): boolean {
+    if (!this.canLevelUp() || !this.state.careerPathProgress) return false
+
+    const oldLevel = this.state.careerPathProgress.currentLevel
+    const newLevel = this.calculateCurrentLevel()?.id
+    if (!newLevel || newLevel === oldLevel) return false
+
+    this.state.careerPathProgress.currentLevel = newLevel
+    this.emit('careerLevelUp', {
+      careerPathId: this.state.careerPathProgress.careerPathId,
+      oldLevel,
+      newLevel
+    })
+
+    return true
+  }
+
   getAvailableDomains(): CompetencyDomain[] {
     if (!this.careerPath) return []
 

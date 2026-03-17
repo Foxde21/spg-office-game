@@ -1,5 +1,11 @@
 import Phaser from 'phaser'
 import { TEXT_STYLE_TITLE, TEXT_STYLE_BUTTON, TEXT_STYLE_SUB } from '../styles/textStyles'
+import { AssessmentManager } from '../managers/Assessment'
+import { GameStateManager } from '../managers/GameState'
+import { InventoryManager } from '../managers/Inventory'
+import { LocationManager } from '../managers/LocationManager'
+import { QuestManager } from '../managers/Quest'
+import { SaveManager } from '../managers/Save'
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -18,6 +24,15 @@ export class MenuScene extends Phaser.Scene {
     newGame.on('pointerover', () => newGame.setColor('#a29bfe'))
     newGame.on('pointerout', () => newGame.setColor('#ffffff'))
     newGame.on('pointerdown', () => {
+      const save = SaveManager.getInstance(this.game)
+      save.deleteSave()
+
+      GameStateManager.getInstance(this.game).reset()
+      InventoryManager.getInstance(this.game).clear()
+      QuestManager.getInstance(this.game).clear()
+      LocationManager.getInstance(this.game).reset()
+      AssessmentManager.getInstance(this.game).reset()
+
       this.scene.start('PreloadScene', { runGame: true })
     })
     const continueBtn = this.add.text(width / 2, height / 2 + 40, 'Продолжить', TEXT_STYLE_BUTTON).setOrigin(0.5).setInteractive({ useHandCursor: true })

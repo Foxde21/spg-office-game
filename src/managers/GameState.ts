@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { GameState, PlayerData, NPCState } from '../types'
-import { CAREER_LEVELS, type CareerLevel } from '../config'
+import type { AssessmentState } from '../types/assessment'
+import { CAREER_LEVELS } from '../config'
 
 export class GameStateManager {
   private static instance: GameStateManager
@@ -10,6 +11,7 @@ export class GameStateManager {
   private constructor(game: Phaser.Game) {
     this.game = game
     this.state = this.createInitialState()
+    this.game.events.on('careerLevelUp', this.onCareerLevelUp, this)
   }
 
   static getInstance(game?: Phaser.Game): GameStateManager {
@@ -53,8 +55,36 @@ export class GameStateManager {
     return this.state.player.respect
   }
 
-  getCareerLevel(): CareerLevel {
-    return this.state.player.careerLevel as CareerLevel
+  getCareerLevel(): string {
+    return this.state.player.careerLevel
+  }
+
+  setCareerLevel(levelId: string): void {
+    this.state.player.careerLevel = levelId
+  }
+
+  getCareerPath(): string | undefined {
+    return this.state.player.careerPath
+  }
+
+  setCareerPath(pathId: string): void {
+    this.state.player.careerPath = pathId
+  }
+
+  getAssessmentState(): AssessmentState | undefined {
+    return this.state.assessment
+  }
+
+  setAssessmentState(state: AssessmentState): void {
+    this.state.assessment = state
+  }
+
+  getFlag(flagId: string): boolean {
+    return Boolean(this.state.flags[flagId])
+  }
+
+  setFlag(flagId: string, value = true): void {
+    this.state.flags[flagId] = value
   }
 
   addStress(amount: number): void {
@@ -90,6 +120,19 @@ export class GameStateManager {
   }
 
   canPromote(): boolean {
+    if (this.state.player.careerPath) {
+      const regGet = this.game.registry?.get
+      if (typeof regGet === 'function') {
+        const assessment = this.game.registry.get('assessmentManager') as unknown
+        if (
+          assessment &&
+          typeof (assessment as { canLevelUp?: unknown }).canLevelUp === 'function'
+        ) {
+          return (assessment as { canLevelUp: () => boolean }).canLevelUp()
+        }
+      }
+    }
+
     const currentLevel = this.getCareerLevel()
     const levelIndex = CAREER_LEVELS.findIndex((l) => l.id === currentLevel)
     
@@ -103,6 +146,16 @@ export class GameStateManager {
   }
 
   promote(): boolean {
+    if (this.state.player.careerPath) {
+      const regGet = this.game.registry?.get
+      if (typeof regGet === 'function') {
+        const assessment = this.game.registry.get('assessmentManager') as unknown
+        if (assessment && typeof (assessment as { promote?: unknown }).promote === 'function') {
+          return (assessment as { promote: () => boolean }).promote()
+        }
+      }
+    }
+
     if (!this.canPromote()) return false
 
     const currentLevel = this.getCareerLevel()
@@ -113,6 +166,14 @@ export class GameStateManager {
     this.game.events.emit('careerLevelUp', { level: nextLevel.id })
     
     return true
+  }
+
+  private onCareerLevelUp(payload: unknown): void {
+    const p = payload as { level?: string; newLevel?: string }
+    const level = p.newLevel ?? p.level
+    if (!level) return
+
+    this.state.player.careerLevel = level
   }
 
   isGameOver(): boolean {

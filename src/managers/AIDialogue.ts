@@ -36,6 +36,8 @@ export class AIDialogueManager {
                              context.relationship > 0 ? 'нейтрально относитесь к игроку' :
                              'скептически относитесь к игроку'
 
+    const careerPathLine = context.careerPath ? `Карьерный путь игрока: ${context.careerPath}` : ''
+
     return `Ты — ${personality.name}, ${personality.role} в IT-компании.
 
 ## Твой характер
@@ -49,6 +51,7 @@ ${personality.speechStyle}
 
 ## Контекст разговора
 Игрок: ${context.playerName}, ${careerTitles[context.careerLevel] || context.careerLevel}
+${careerPathLine}
 Состояние игрока: ${stressLevel}, ${respectLevel}
 История разговора: ${context.conversationHistory.length > 0 ? 'продолжение диалога' : 'начало разговора'}
 

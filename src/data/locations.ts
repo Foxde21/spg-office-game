@@ -57,8 +57,17 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
                 text: 'Твоя первая задача — найди документацию по проекту. Она в кабинете директора.',
                 choices: [
                   { text: 'Понял, иду искать!', nextDialogue: 'accepted', startQuest: 'find-documentation', respectChange: 5 },
-                  { text: 'А можно поподробнее?', nextDialogue: 'details', stressChange: -5 },
+                  { text: 'А где искать?', nextDialogue: 'details' },
                 ],
+              },
+            ],
+          },
+          {
+            id: 'career-react-ai',
+            lines: [
+              {
+                speaker: 'Тим Лид',
+                text: 'AI? Круто. Тогда давай договоримся: сначала понимание задачи и данных, потом модели. И без магии — только измеримые улучшения.',
               },
             ],
           },
@@ -97,6 +106,103 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
               {
                 speaker: 'Тим Лид',
                 text: 'Это важный первый шаг. Продолжай в том же духе!',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'petya-senior',
+        name: 'Петя Сеньор',
+        role: 'Senior Developer',
+        sprite: 'petya',
+        x: 760,
+        y: 304,
+        dialogues: [
+          {
+            id: 'petya-intro',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Ну, что, живой ещё? Если хочешь расти — расти головой, а не переработками.',
+              },
+            ],
+          },
+          {
+            id: 'career-choice-ai',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Слушай, я тут заметил — у тебя неплохо идёт. Есть один вопрос... Ты задумывался, куда хочешь расти?',
+              },
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Ну так что?',
+                choices: [
+                  {
+                    text: 'Мне интересен AI — хочу разбираться в машинном обучении',
+                    action: 'setFlag:careerPathChosen;setCareerPath:ai',
+                    nextDialogue: 'career-choice-ai-confirm'
+                  },
+                  {
+                    text: 'Посмотреть другие пути',
+                    action: 'describeCareerPaths'
+                  },
+                  {
+                    text: 'Пока не определился...',
+                    nextDialogue: 'career-choice-undecided'
+                  }
+                ],
+              },
+            ],
+          },
+          {
+            id: 'career-choice-ai-confirm',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'О, вот это по-взрослому. AI — отличный выбор. Мне нравится. Давай, я тебе помогу собрать нормальный маршрут — без суеты и без выгорания.',
+              },
+            ],
+          },
+          {
+            id: 'career-choice-undecided',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Нормально. Только смотри: если будешь "просто делать задачи" — тебя так и будут повышать по инерции. Медленно и больно.',
+              },
+              {
+                speaker: 'Петя Сеньор',
+                text: 'С AI сейчас проще всего набрать вес. Это не про хайп — это про то, что тебя начинают слушать. Хочешь, покажу, куда можно зайти?',
+                choices: [
+                  {
+                    text: 'Посмотреть другие пути',
+                    action: 'describeCareerPaths'
+                  },
+                  {
+                    text: 'Не сейчас, потом',
+                    nextDialogue: 'career-choice-later'
+                  }
+                ],
+              },
+            ],
+          },
+          {
+            id: 'career-choice-later',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Окей. Только не тяни: выберешь направление — и качаться будет проще. Созреешь — подходи.',
+              },
+            ],
+          },
+          {
+            id: 'career-react-ai',
+            lines: [
+              {
+                speaker: 'Петя Сеньор',
+                text: 'AI — тема мощная. Только не пытайся "впихнуть" модель туда, где хватит правила. Договорились?',
               },
             ],
           },
