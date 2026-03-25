@@ -1,19 +1,36 @@
 import Phaser from 'phaser'
 import type { Dialogue, DialogueChoice, ItemData, AIContext } from '../types'
+import type { AssessmentQuestion, CompetencyDomain, AssessmentState, SubmitAnswerResult } from '../types/assessment'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
 import { SaveManager } from '../managers/Save'
+import { SkillInsightsManager } from '../managers/SkillInsights'
 import { AIDialogueManager } from '../managers/AIDialogue'
 import { LocationManager } from '../managers/LocationManager'
 import { CAREER_LEVELS, COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config'
 import { getAllCareerPaths, getCareerPath } from '../data/careerPaths'
+import { getSkillMatrixForNpc } from '../data/skillMatrices'
+import type { SkillMatrixLevelId } from '../data/skillMatrices/softwareDev'
 
 export class UIScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container
+  private dialogueBackground!: Phaser.GameObjects.Graphics
+  private dialogueTopLine!: Phaser.GameObjects.Graphics
   private dialogueText!: Phaser.GameObjects.Text
   private speakerText!: Phaser.GameObjects.Text
   private choicesContainer!: Phaser.GameObjects.Container
+  private dialogueBoxWidth = 820
+  private dialogueBoxHeight = 240
+  private readonly DIALOGUE_MIN_HEIGHT = 240
+  private readonly DIALOGUE_MAX_HEIGHT = 470
+  private readonly DIALOGUE_TEXT_TOP = 52
+  private readonly DIALOGUE_CHOICES_TOP = 180
+  private dialogueChoicesTop = 180
+  private readonly DIALOGUE_BOTTOM_PADDING = 44
+  private choicesViewportHeight = 0
+  private choicesContentHeight = 0
+  private choicesStartIndex = 0
   private currentDialogue: Dialogue | null = null
   private availableDialogues: Dialogue[] = []
   private currentLineIndex = 0
@@ -24,6 +41,17 @@ export class UIScene extends Phaser.Scene {
   private questManager!: QuestManager
   private saveManager!: SaveManager
   private aiManager!: AIDialogueManager
+
+  private activeAssessment:
+    | {
+        domainId: string
+        domainName: string
+        domainScoreBefore: number
+        questions: AssessmentQuestion[]
+        currentIndex: number
+        scores: number[]
+      }
+    | null = null
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -62,6 +90,505 @@ export class UIScene extends Phaser.Scene {
   private queuedDialogueState:
     | { dialogue: Dialogue; lineIndex: number; availableDialogues: Dialogue[] }
     | null = null
+
+  private getAssessmentManager(): {
+    startAssessmentSession: (
+      domainId: string,
+      count?: number,
+      assessorNpcId?: string
+    ) => { domainId: string; questions: AssessmentQuestion[] }
+    submitAnswer: (questionId: string, choiceId: string) => SubmitAnswerResult
+    getAvailableDomains: () => CompetencyDomain[]
+    getDomainProgress: (domainId: string) => { score: number }
+    getAssessmentState: () => AssessmentState
+    getCurrentLevel: () => { id: string; title?: string } | null
+    getAverageScore: () => number
+    resetDomainProgress: (domainId: string) => boolean
+    promote: () => boolean
+  } | null {
+    const regGet = this.game.registry?.get
+    if (typeof regGet !== 'function') return null
+
+    const assessment = this.game.registry.get('assessmentManager') as unknown
+    if (!assessment) return null
+
+    const api = assessment as {
+      startAssessmentSession?: unknown
+      submitAnswer?: unknown
+      getAvailableDomains?: unknown
+      getDomainProgress?: unknown
+      getAssessmentState?: unknown
+      getCurrentLevel?: unknown
+      getAverageScore?: unknown
+      resetDomainProgress?: unknown
+      promote?: unknown
+    }
+
+    if (
+      typeof api.startAssessmentSession !== 'function' ||
+      typeof api.submitAnswer !== 'function' ||
+      typeof api.getAvailableDomains !== 'function' ||
+      typeof api.getDomainProgress !== 'function' ||
+      typeof api.getAssessmentState !== 'function' ||
+      typeof api.getCurrentLevel !== 'function' ||
+      typeof api.getAverageScore !== 'function' ||
+      typeof api.resetDomainProgress !== 'function' ||
+      typeof api.promote !== 'function'
+    ) {
+      return null
+    }
+
+    return assessment as {
+      startAssessmentSession: (
+        domainId: string,
+        count?: number,
+        assessorNpcId?: string
+      ) => { domainId: string; questions: AssessmentQuestion[] }
+      submitAnswer: (questionId: string, choiceId: string) => SubmitAnswerResult
+      getAvailableDomains: () => CompetencyDomain[]
+      getDomainProgress: (domainId: string) => { score: number }
+      getAssessmentState: () => AssessmentState
+      getCurrentLevel: () => { id: string; title?: string } | null
+      getAverageScore: () => number
+      resetDomainProgress: (domainId: string) => boolean
+      promote: () => boolean
+    }
+  }
+
+  private getAdaptiveAssessmentQuestionCount(): number {
+    const assessment = this.getAssessmentManager()
+    if (!assessment) return 3
+
+    const levelId = assessment.getCurrentLevel()?.id
+    const avg = assessment.getAverageScore()
+
+    let count = 3
+    if (levelId?.includes('middle')) count = 4
+    if (levelId?.includes('senior')) count = 5
+    if (levelId?.includes('architect')) count = 6
+
+    if (avg >= 70) count = Math.max(count, 6)
+    else if (avg >= 50) count = Math.max(count, 5)
+    else if (avg >= 30) count = Math.max(count, 4)
+
+    return Math.max(3, Math.min(6, count))
+  }
+
+  private queueResumeAfterCurrentLine(): void {
+    if (!this.currentDialogue) return
+
+    this.queuedDialogueState = {
+      dialogue: this.currentDialogue,
+      lineIndex: this.currentLineIndex + 1,
+      availableDialogues: this.availableDialogues,
+    }
+  }
+
+  private showAssessmentDomainSelect(shouldQueue: boolean): void {
+    const assessment = this.getAssessmentManager()
+    if (!assessment || !this.scriptedNpc) {
+      this.endDialogue()
+
+      return
+    }
+
+    if (this.gameState.getCareerPath() !== 'ai') {
+      this.endDialogue()
+
+      return
+    }
+
+    if (shouldQueue) {
+      this.queueResumeAfterCurrentLine()
+    }
+
+    const questionCount = this.getAdaptiveAssessmentQuestionCount()
+
+    const domains = assessment.getAvailableDomains()
+    const choices: DialogueChoice[] = domains.map((d) => ({
+      text: d.name,
+      startAssessment: {
+        domainId: d.id,
+        questionCount,
+      }
+    }))
+
+    choices.push({
+      text: 'Не сегодня',
+      action: 'resumeDialogue'
+    })
+
+    const dialogue: Dialogue = {
+      id: 'assessment-domain-select',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: 'По какой теме хочешь сегодня?',
+          choices,
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private mapCareerLevelToSkillLevel(levelId: string | undefined): SkillMatrixLevelId {
+    if (!levelId) return 'junior'
+    if (levelId.includes('junior')) return 'junior'
+    if (levelId.includes('middle')) return 'middle'
+    if (levelId.includes('senior')) return 'senior'
+    if (levelId.includes('architect')) return 'expert'
+
+    return 'junior'
+  }
+
+  private showSkillTips(): void {
+    if (!this.scriptedNpc || !this.currentDialogue) return
+
+    const npcId = this.scriptedNpc.npcId
+    const matrix = getSkillMatrixForNpc(npcId)
+    if (!matrix) return
+
+    const insights = SkillInsightsManager.getInstance(this.game)
+    const weakest = insights.getWeakestTagsForNpc(npcId, 3)
+    if (weakest.length === 0) return
+
+    let currentLevelId: string | undefined
+    if (typeof this.game.registry?.get === 'function') {
+      const assessment = this.game.registry.get('assessmentManager') as unknown
+      if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+        const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
+        currentLevelId = level?.id
+      }
+    }
+
+    const skillLevel = this.mapCareerLevelToSkillLevel(currentLevelId)
+    const nextLevel: SkillMatrixLevelId | undefined =
+      skillLevel === 'junior'
+        ? 'middle'
+        : skillLevel === 'middle'
+          ? 'senior'
+          : skillLevel === 'senior'
+            ? 'expert'
+            : undefined
+
+    const lines = weakest
+      .map((w) => {
+        const item = matrix.items[w.tag]
+        const current = item?.expectations?.[skillLevel]
+        const next = nextLevel ? item?.expectations?.[nextLevel] : undefined
+        const score = Math.round(w.score)
+
+        if (current && next) {
+          return `• ${w.title} (${score}/100)\nСейчас: ${current}\nСледующий уровень: ${next}`
+        }
+
+        if (current) {
+          return `• ${w.title} (${score}/100)\nСейчас: ${current}`
+        }
+
+        return `• ${w.title} (${score}/100)`
+      })
+      .join('\n\n')
+
+    this.queuedDialogueState = {
+      dialogue: this.currentDialogue,
+      lineIndex: this.currentLineIndex,
+      availableDialogues: this.availableDialogues,
+    }
+
+    const dialogue: Dialogue = {
+      id: 'skill-tips',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: `Смотри, что стоит подтянуть:\n\n${lines}`,
+          choices: [
+            {
+              text: 'Назад',
+              action: 'resumeDialogue'
+            }
+          ]
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private showAssessmentQuestion(): void {
+    if (!this.activeAssessment || !this.scriptedNpc) return
+
+    const question = this.activeAssessment.questions[this.activeAssessment.currentIndex]
+    if (!question) {
+      this.showAssessmentSummary()
+
+      return
+    }
+
+    const choices: DialogueChoice[] = question.choices.map((c) => ({
+      text: c.text,
+      action: `assessmentAnswer:${question.id}:${c.id}`
+    }))
+
+    const dialogue: Dialogue = {
+      id: `assessment-question-${question.id}`,
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: `${question.scenario}\n\n${question.question}`,
+          choices,
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private startAssessment(domainId: string, questionCount?: number): void {
+    const assessment = this.getAssessmentManager()
+    if (!assessment || !this.scriptedNpc) return
+
+    if (this.gameState.getCareerPath() !== 'ai') {
+      this.endDialogue()
+
+      return
+    }
+
+    if (this.gameState.getStress() > 80) {
+      const dialogue: Dialogue = {
+        id: 'assessment-too-tired',
+        lines: [
+          {
+            speaker: this.scriptedNpc.name,
+            text: 'Ты выглядишь уставшим. Может, сходи за кофе и вернёмся позже?',
+            choices: [
+              {
+                text: 'Окей',
+                action: 'resumeDialogue'
+              }
+            ]
+          }
+        ]
+      }
+
+      this.availableDialogues = [dialogue]
+      this.currentDialogue = dialogue
+      this.currentLineIndex = 0
+      this.showCurrentLine()
+
+      return
+    }
+
+    const progressBefore = assessment.getDomainProgress(domainId)
+    const domainScoreBefore = progressBefore?.score ?? 0
+
+    let session: { questions: AssessmentQuestion[] }
+    try {
+      session = assessment.startAssessmentSession(domainId, questionCount, this.scriptedNpc.npcId)
+    } catch {
+      this.endDialogue()
+
+      return
+    }
+
+    const domains = assessment.getAvailableDomains()
+    const domainName = domains.find((d) => d.id === domainId)?.name || domainId
+
+    this.activeAssessment = {
+      domainId,
+      domainName,
+      domainScoreBefore,
+      questions: session.questions,
+      currentIndex: 0,
+      scores: [],
+    }
+
+    if (session.questions.length === 0) {
+      this.activeAssessment = null
+
+      const dialogue: Dialogue = {
+        id: 'assessment-domain-empty',
+        lines: [
+          {
+            speaker: this.scriptedNpc.name,
+            text: 'Ты уже ответил на все вопросы по этой теме. Молодец! Попробуй другой домен.',
+            choices: [
+              {
+                text: 'Выбрать другой домен',
+                action: 'openAssessmentDomainSelectResume'
+              },
+              {
+                text: 'Пройти ещё раз',
+                action: `assessmentRestartDomain:${domainId}`
+              },
+              {
+                text: 'Ок',
+                action: 'resumeDialogue'
+              }
+            ]
+          }
+        ]
+      }
+
+      this.availableDialogues = [dialogue]
+      this.currentDialogue = dialogue
+      this.currentLineIndex = 0
+      this.showCurrentLine()
+
+      return
+    }
+
+    this.showAssessmentQuestion()
+  }
+
+  private handleAssessmentAnswer(questionId: string, choiceId: string): void {
+    const assessment = this.getAssessmentManager()
+    if (!assessment || !this.scriptedNpc || !this.activeAssessment) return
+
+    const result = assessment.submitAnswer(questionId, choiceId)
+    this.activeAssessment.scores.push(result.score)
+    this.activeAssessment.currentIndex += 1
+
+    this.gameState.setAssessmentState(assessment.getAssessmentState())
+
+    const stress = this.gameState.getStress()
+    if (stress > 80) {
+      this.activeAssessment = null
+
+      const dialogue: Dialogue = {
+        id: 'assessment-too-tired',
+        lines: [
+          {
+            speaker: this.scriptedNpc.name,
+            text: 'Ты выглядишь уставшим. Может, сходи за кофе и вернёмся позже?',
+            choices: [
+              {
+                text: 'Окей',
+                action: 'resumeDialogue'
+              }
+            ]
+          }
+        ]
+      }
+
+      this.availableDialogues = [dialogue]
+      this.currentDialogue = dialogue
+      this.currentLineIndex = 0
+      this.showCurrentLine()
+
+      return
+    }
+
+    let text = result.feedback
+    if (result.score < 70 && result.explanation) {
+      text = `${text}\n\nПодсказка: ${result.explanation}`
+    }
+
+    const hasMore = this.activeAssessment.currentIndex < this.activeAssessment.questions.length
+    const nextAction = hasMore ? 'assessmentNext' : 'assessmentFinish'
+    const nextText = hasMore ? 'Следующий вопрос' : 'Итог'
+
+    const dialogue: Dialogue = {
+      id: `assessment-feedback-${questionId}`,
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text,
+          choices: [
+            {
+              text: nextText,
+              action: nextAction
+            }
+          ]
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private showAssessmentSummary(): void {
+    if (!this.activeAssessment || !this.scriptedNpc) {
+      this.endDialogue()
+
+      return
+    }
+
+    const assessment = this.getAssessmentManager()
+    if (!assessment) {
+      this.endDialogue()
+
+      return
+    }
+
+    const scores = this.activeAssessment.scores
+    const avg = scores.length > 0 ? scores.reduce((acc, s) => acc + s, 0) / scores.length : 0
+    const after = assessment.getDomainProgress(this.activeAssessment.domainId)?.score ?? 0
+    const before = this.activeAssessment.domainScoreBefore
+    const domainName = this.activeAssessment.domainName
+
+    const npcId = this.scriptedNpc.npcId
+    const skillMatrix = getSkillMatrixForNpc(npcId)
+    const insights = SkillInsightsManager.getInstance(this.game)
+    const weakest = skillMatrix ? insights.getWeakestTagsForNpc(npcId, 3) : []
+
+    this.activeAssessment = null
+
+    const levelUp = assessment.promote()
+    if (levelUp) {
+      this.gameState.setAssessmentState(assessment.getAssessmentState())
+    }
+
+    const afterLevelTitle = assessment.getCurrentLevel()?.title
+    const levelUpLine =
+      levelUp && afterLevelTitle
+        ? `\n\nПоздравляю, ты вырос в грейде: ${afterLevelTitle}!`
+        : levelUp
+          ? '\n\nПоздравляю, ты вырос в грейде!'
+          : ''
+
+    const choices: DialogueChoice[] = []
+    if (weakest.length > 0) {
+      choices.push({
+        text: 'Советы',
+        action: 'showSkillTips'
+      })
+    }
+
+    choices.push({
+      text: 'Ок',
+      action: 'resumeDialogue'
+    })
+
+    const dialogue: Dialogue = {
+      id: 'assessment-summary',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: `На сегодня хватит. Твой результат по ассессменту «${domainName}»: ${Math.round(avg)}/100. Общий результат по теме: Было ${Math.round(before)}, стало ${Math.round(after)}.${levelUpLine}`,
+          choices
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
 
   private getCareerReactionLine(
     npcId: string,
@@ -362,7 +889,7 @@ export class UIScene extends Phaser.Scene {
 
     this.stressBar = this.add.graphics()
     this.stressBar.setDepth(52)
-    this.drawBar(this.stressBar, x + 68, y + 30, this.SECTION_W - 80, 14, 0, COLORS.danger)
+    this.drawBar(this.stressBar, x + 68, y + 30, this.SECTION_W - 80, 14, 0, COLORS.warning)
 
     this.stressWarning = this.add.text(x + this.SECTION_W - 8, y + 30, '', {
       fontSize: '14px',
@@ -513,8 +1040,7 @@ export class UIScene extends Phaser.Scene {
     const y = this.HUD_Y + 6
     const barW = this.SECTION_W - 80
 
-    const stressColor = stress > 70 ? COLORS.danger : stress > 40 ? COLORS.warning : COLORS.success
-    this.drawBar(this.stressBar, x + 68, y + 30, barW, 14, stress, stressColor)
+    this.drawBar(this.stressBar, x + 68, y + 30, barW, 14, stress, COLORS.warning)
     this.drawBar(this.respectBar, x + 68, y + 52, barW, 14, respect, COLORS.success)
 
     if (stress > 70) {
@@ -806,22 +1332,22 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createDialogueBox() {
-    const boxWidth = 820
-    const boxHeight = 240
+    const boxWidth = this.dialogueBoxWidth
+    const boxHeight = this.dialogueBoxHeight
     const x = GAME_WIDTH / 2
     const y = this.HUD_Y - boxHeight / 2 - 10
 
     this.dialogueBox = this.add.container(x, y)
 
-    const background = this.add.graphics()
-    background.fillStyle(0x1a1a2e, 0.97)
-    background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
-    background.lineStyle(2, 0x6c5ce7)
-    background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+    this.dialogueBackground = this.add.graphics()
+    this.dialogueBackground.fillStyle(0x1a1a2e, 0.97)
+    this.dialogueBackground.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+    this.dialogueBackground.lineStyle(2, 0x6c5ce7)
+    this.dialogueBackground.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
 
-    const topLine = this.add.graphics()
-    topLine.lineStyle(1, 0x4a4a6a, 0.5)
-    topLine.lineBetween(-boxWidth / 2 + 12, -boxHeight / 2 + 40, boxWidth / 2 - 12, -boxHeight / 2 + 40)
+    this.dialogueTopLine = this.add.graphics()
+    this.dialogueTopLine.lineStyle(1, 0x6c5ce7, 0.6)
+    this.dialogueTopLine.lineBetween(-boxWidth / 2 + 15, -boxHeight / 2 + 40, boxWidth / 2 - 15, -boxHeight / 2 + 40)
 
     this.speakerText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 12, '', {
       fontSize: '16px',
@@ -829,7 +1355,7 @@ export class UIScene extends Phaser.Scene {
       color: '#a29bfe',
     })
 
-    this.dialogueText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 52, '', {
+    this.dialogueText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + this.DIALOGUE_TEXT_TOP, '', {
       fontSize: '15px',
       color: '#e0e0f0',
       wordWrap: { width: boxWidth - 48 },
@@ -837,7 +1363,8 @@ export class UIScene extends Phaser.Scene {
 
     this.dialogueText.setLineSpacing(6)
 
-    this.choicesContainer = this.add.container(-boxWidth / 2 + 20, -boxHeight / 2 + 140)
+    this.dialogueChoicesTop = this.DIALOGUE_CHOICES_TOP
+    this.choicesContainer = this.add.container(-boxWidth / 2 + 20, -boxHeight / 2 + this.dialogueChoicesTop)
 
     const inputHtml = `
       <input type="text" id="ai-input" placeholder="Введите сообщение..." 
@@ -848,12 +1375,20 @@ export class UIScene extends Phaser.Scene {
     this.inputField.setVisible(false)
 
     this.dialogueHint = this.add.text(boxWidth / 2 - 16, boxHeight / 2 - 10, '[ПРОБЕЛ] Далее  [ESC] Закрыть', {
-      fontSize: '11px',
-      color: '#444466',
+      fontSize: '12px',
+      color: '#8888bb',
     })
     this.dialogueHint.setOrigin(1, 1)
 
-    this.dialogueBox.add([background, topLine, this.speakerText, this.dialogueText, this.choicesContainer, this.inputField, this.dialogueHint])
+    this.dialogueBox.add([
+      this.dialogueBackground,
+      this.dialogueTopLine,
+      this.speakerText,
+      this.dialogueText,
+      this.choicesContainer,
+      this.inputField,
+      this.dialogueHint
+    ])
     this.dialogueBox.setVisible(false)
     this.dialogueBox.setDepth(200)
 
@@ -862,6 +1397,36 @@ export class UIScene extends Phaser.Scene {
     this.dialogueUpKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP)
     this.dialogueDownKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN)
     this.dialogueEnterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER)
+  }
+
+  private resizeDialogueBox(targetHeight: number) {
+    const boxWidth = this.dialogueBoxWidth
+    const minH = this.DIALOGUE_MIN_HEIGHT
+    const maxH = this.DIALOGUE_MAX_HEIGHT
+    const boxHeight = Math.max(minH, Math.min(maxH, targetHeight))
+    this.dialogueBoxHeight = boxHeight
+
+    const y = this.HUD_Y - boxHeight / 2 - 10
+    this.dialogueBox.setPosition(GAME_WIDTH / 2, y)
+
+    this.dialogueBackground.clear()
+    this.dialogueBackground.fillStyle(0x1a1a2e, 0.97)
+    this.dialogueBackground.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+    this.dialogueBackground.lineStyle(2, 0x6c5ce7)
+    this.dialogueBackground.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+
+    this.dialogueTopLine.clear()
+    this.dialogueTopLine.lineStyle(1, 0x6c5ce7, 0.6)
+    this.dialogueTopLine.lineBetween(-boxWidth / 2 + 15, -boxHeight / 2 + 40, boxWidth / 2 - 15, -boxHeight / 2 + 40)
+
+    this.speakerText.setPosition(-boxWidth / 2 + 20, -boxHeight / 2 + 12)
+    this.dialogueText.setPosition(-boxWidth / 2 + 20, -boxHeight / 2 + this.DIALOGUE_TEXT_TOP)
+    this.choicesContainer.setPosition(-boxWidth / 2 + 20, -boxHeight / 2 + this.dialogueChoicesTop)
+
+    const viewportHeight = Math.max(1, boxHeight - this.dialogueChoicesTop - this.DIALOGUE_BOTTOM_PADDING)
+    this.choicesViewportHeight = viewportHeight
+
+    this.dialogueHint.setPosition(boxWidth / 2 - 16, boxHeight / 2 - 10)
   }
 
   private startDialogue(
@@ -1003,13 +1568,27 @@ export class UIScene extends Phaser.Scene {
 
     this.speakerText.setText(line.speaker)
     this.dialogueText.setText(line.text)
+
+    const dynamicTop = this.DIALOGUE_TEXT_TOP + this.dialogueText.height + 18
+    this.dialogueChoicesTop = Math.max(this.DIALOGUE_CHOICES_TOP, dynamicTop)
+
     this.choicesContainer.removeAll(true)
+    this.choicesContentHeight = 0
+    this.choicesStartIndex = 0
 
     if (line.choices && line.choices.length > 0) {
       this.showChoices(line.choices)
       this.dialogueHint.setText('[ESC] Закрыть')
     } else {
       this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
+    }
+
+    const baseHeight = this.dialogueChoicesTop + this.DIALOGUE_BOTTOM_PADDING
+    const desired = baseHeight + this.choicesContentHeight
+    this.resizeDialogueBox(desired)
+
+    if (this.currentChoices.length > 0) {
+      this.renderChoices()
     }
   }
 
@@ -1029,26 +1608,77 @@ export class UIScene extends Phaser.Scene {
   private renderChoices() {
     this.choicesContainer.removeAll(true)
 
-    this.currentChoices.forEach((choice, index) => {
-      const isSelected = index === this.selectedChoiceIndex
+    const maxWidth = 760
+    const textX = 16
+    const paddingY = 6
+    const rowGap = 6
+
+    const heights: number[] = []
+    for (let i = 0; i < this.currentChoices.length; i++) {
+      const isSelected = i === this.selectedChoiceIndex
+      const tmp = this.add.text(0, -10000, `${isSelected ? '▶' : '▸'}  ${this.currentChoices[i].text}`, {
+        fontSize: '14px',
+        wordWrap: { width: maxWidth - textX - 10 },
+      })
+      const h = Math.max(28, tmp.height + paddingY * 2)
+      tmp.destroy()
+      heights.push(h)
+    }
+
+    this.choicesContentHeight = heights.reduce((acc, h) => acc + h + rowGap, 0)
+
+    let start = this.choicesStartIndex
+    if (this.selectedChoiceIndex < start) start = this.selectedChoiceIndex
+
+    const viewportH = this.choicesViewportHeight || 92
+    const computeEnd = (s: number) => {
+      let y = 0
+      let e = s
+      while (e < heights.length) {
+        const next = y + heights[e] + rowGap
+        if (next > viewportH && e > s) break
+        y = next
+        e += 1
+      }
+      return e
+    }
+
+    let end = computeEnd(start)
+    while (this.selectedChoiceIndex >= end && start < heights.length - 1) {
+      start += 1
+      end = computeEnd(start)
+    }
+
+    if (start < 0) start = 0
+    if (start >= heights.length) start = Math.max(0, heights.length - 1)
+    end = computeEnd(start)
+
+    this.choicesStartIndex = start
+
+    let cursorY = 0
+    for (let i = start; i < end; i++) {
+      const isSelected = i === this.selectedChoiceIndex
       const rowBg = this.add.graphics()
+
+      const choiceText = this.add.text(textX, cursorY + paddingY, `${isSelected ? '▶' : '▸'}  ${this.currentChoices[i].text}`, {
+        fontSize: '14px',
+        color: isSelected ? '#ffffff' : '#8888bb',
+        wordWrap: { width: maxWidth - textX - 10 },
+      })
+
+      const rowHeight = heights[i]
 
       if (isSelected) {
         rowBg.fillStyle(0x6c5ce7, 0.25)
-        rowBg.fillRoundedRect(-4, index * 34 - 2, 760, 28, 4)
+        rowBg.fillRoundedRect(-4, cursorY - 2, maxWidth, rowHeight + 4, 4)
         rowBg.lineStyle(1, 0x6c5ce7, 0.5)
-        rowBg.strokeRoundedRect(-4, index * 34 - 2, 760, 28, 4)
+        rowBg.strokeRoundedRect(-4, cursorY - 2, maxWidth, rowHeight + 4, 4)
       }
-
-      const choiceText = this.add.text(16, index * 34 + 6, `${isSelected ? '▶' : '▸'}  ${choice.text}`, {
-        fontSize: '14px',
-        color: isSelected ? '#ffffff' : '#8888bb',
-      })
 
       choiceText.setInteractive({ useHandCursor: true })
 
       choiceText.on('pointerover', () => {
-        this.selectedChoiceIndex = index
+        this.selectedChoiceIndex = i
         this.renderChoices()
       })
 
@@ -1057,7 +1687,8 @@ export class UIScene extends Phaser.Scene {
       })
 
       this.choicesContainer.add([rowBg, choiceText])
-    })
+      cursorY += rowHeight + rowGap
+    }
   }
 
   private onChoiceUp() {
@@ -1130,6 +1761,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   private handleChoice(choice: DialogueChoice) {
+    if (choice.startAssessment) {
+      this.startAssessment(choice.startAssessment.domainId, choice.startAssessment.questionCount)
+
+      return
+    }
+
     if (choice.stressChange) {
       this.gameState.addStress(choice.stressChange)
     }
@@ -1166,6 +1803,47 @@ export class UIScene extends Phaser.Scene {
         .split(';')
         .map((a) => a.trim())
         .filter(Boolean)
+
+      if (actionParts.includes('showSkillTips')) {
+        this.showSkillTips()
+
+        return
+      }
+
+      const assessmentAnswer = actionParts.find((a) => a.startsWith('assessmentAnswer:'))
+      if (assessmentAnswer) {
+        const raw = assessmentAnswer.slice('assessmentAnswer:'.length)
+        const [questionId, choiceId] = raw.split(':')
+        if (questionId && choiceId) {
+          this.handleAssessmentAnswer(questionId, choiceId)
+        }
+
+        return
+      }
+
+      if (actionParts.includes('assessmentNext')) {
+        this.showAssessmentQuestion()
+
+        return
+      }
+
+      if (actionParts.includes('assessmentFinish')) {
+        this.showAssessmentSummary()
+
+        return
+      }
+
+      if (actionParts.includes('openAssessmentDomainSelect')) {
+        this.showAssessmentDomainSelect(true)
+
+        return
+      }
+
+      if (actionParts.includes('openAssessmentDomainSelectResume')) {
+        this.showAssessmentDomainSelect(false)
+
+        return
+      }
 
       if (actionParts.includes('openCareerPathsSelect')) {
         this.showCareerPathsSelect()
@@ -1262,7 +1940,7 @@ export class UIScene extends Phaser.Scene {
                 typeof (assessment as { getAssessmentState?: unknown }).getAssessmentState === 'function'
               ) {
                 const state = (assessment as { getAssessmentState: () => unknown }).getAssessmentState()
-                this.gameState.setAssessmentState(state as import('../types/assessment').AssessmentState)
+                this.gameState.setAssessmentState(state as AssessmentState)
               }
             }
           }

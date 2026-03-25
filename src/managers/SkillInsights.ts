@@ -60,6 +60,36 @@ export class SkillInsightsManager {
     return this.tagCounts.get(this.getKey(matrixId, tag)) ?? 0
   }
 
+  getWeakestTagsForNpc(
+    npcId: string,
+    count = 3
+  ): Array<{ matrixId: string; tag: string; title: string; score: number }> {
+    const matrix = getSkillMatrixForNpc(npcId)
+    if (!matrix) return []
+
+    const scored = Object.keys(matrix.items)
+      .map((tag) => {
+        const key = this.getKey(matrix.id, tag)
+
+        return {
+          tag,
+          title: matrix.items[tag].title,
+          score: this.tagScores.get(key) ?? 0,
+          count: this.tagCounts.get(key) ?? 0
+        }
+      })
+      .filter((x) => x.count > 0)
+
+    scored.sort((a, b) => a.score - b.score)
+
+    return scored.slice(0, Math.max(1, Math.min(count, scored.length))).map((x) => ({
+      matrixId: matrix.id,
+      tag: x.tag,
+      title: x.title,
+      score: x.score
+    }))
+  }
+
   clear(): void {
     this.tagScores.clear()
     this.tagCounts.clear()
