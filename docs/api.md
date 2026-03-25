@@ -167,6 +167,40 @@ class GameStateManager {
 }
 ```
 
+### AssessmentManager
+
+Управляет ассессмент-сессиями, прогрессом доменов и повышением грейда внутри выбранного карьерного пути.
+
+Хранится в `game.registry` как `assessmentManager`.
+
+```typescript
+class AssessmentManager {
+  static getInstance(game?: Phaser.Game): AssessmentManager
+
+  setCareerPath(id: string): void
+  getCareerPathId(): string | null
+
+  getCurrentLevel(): { id: string; title?: string } | null
+  getAvailableDomains(): Array<{ id: string; name: string }>
+  getDomainProgress(domainId: string): { score: number; answeredQuestions: string[] } | null
+
+  startAssessmentSession(
+    domainId: string,
+    questionCount?: number,
+    assessorNpcId?: string
+  ): { questions: AssessmentQuestion[] }
+  submitAnswer(questionId: string, choiceId: string): { score: number; feedback: string; explanation?: string }
+
+  resetDomainProgress(domainId: string): boolean
+
+  promote(): boolean
+
+  getAverageScore(): number
+  getAssessmentState(): AssessmentState
+  loadState(state: AssessmentState): void
+}
+```
+
 ### SkillInsightsManager
 
 Считает EMA по `competencyTags` из события `assessmentAnswered` и эмитит `skillInsight`.
