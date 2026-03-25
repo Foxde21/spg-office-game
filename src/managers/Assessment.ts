@@ -172,9 +172,50 @@ export class AssessmentManager {
     if (!this.state.careerPathProgress.domainProgress[domainId]) return false
 
     this.state.careerPathProgress.domainProgress[domainId].answeredQuestions = []
+    this.state.careerPathProgress.domainProgress[domainId].score = 0
+    this.state.careerPathProgress.domainProgress[domainId].lastAssessmentDate = undefined
     this.rebuildAnsweredQuestionIds()
 
     return true
+  }
+
+  getLevelUpBlockers(): {
+    nextLevelTitle?: string
+    avgScore: number
+    attemptedDomains: number
+    requiredAttemptedDomains: number
+    domainsBelowMin: Array<{ domainId: string; score: number; required: number }>
+    avgBelowMin: boolean
+    attemptedBelowMin: boolean
+  } | null {
+    if (!this.careerPath || !this.state.careerPathProgress) return null
+
+    const levels = this.careerPath.levels
+    const currentId = this.state.careerPathProgress.currentLevel
+    const idx = levels.findIndex((l) => l.id === currentId)
+    if (idx < 0 || idx >= levels.length - 1) return null
+
+    const next = levels[idx + 1]
+    const avgScore = this.getAverageScore()
+    const progress = Object.values(this.state.careerPathProgress.domainProgress).filter(
+      (d) => (d.answeredQuestions?.length || 0) > 0
+    )
+    const requiredAttemptedDomains = next.minDomainsAttempted ?? 1
+    const attemptedDomains = progress.length
+
+    const domainsBelowMin = progress
+      .filter((d) => d.score < next.minDomainScore)
+      .map((d) => ({ domainId: d.domainId, score: d.score, required: next.minDomainScore }))
+
+    return {
+      nextLevelTitle: next.title,
+      avgScore,
+      attemptedDomains,
+      requiredAttemptedDomains,
+      domainsBelowMin,
+      avgBelowMin: avgScore < next.minAvgScore,
+      attemptedBelowMin: attemptedDomains < requiredAttemptedDomains
+    }
   }
 
   getNextQuestion(domainId: string): AssessmentQuestion | null {

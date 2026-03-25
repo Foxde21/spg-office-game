@@ -1,5 +1,22 @@
 import { expect, type Page } from '@playwright/test'
 
+export type WindowWithGame = {
+  game?: unknown
+}
+
+export type PhaserGameLike = {
+  destroy?: (removeCanvas?: boolean) => void
+  scene?: {
+    start?: (key: string) => void
+    isActive?: (key: string) => boolean
+    isPaused?: (key: string) => boolean
+    getScene?: (key: string) => unknown
+  }
+  registry?: {
+    get?: (key: string) => unknown
+  }
+}
+
 export async function clearLocalStorage(page: Page) {
   await page.addInitScript(() => {
     localStorage.clear()
@@ -9,7 +26,8 @@ export async function clearLocalStorage(page: Page) {
 export async function destroyGame(page: Page) {
   await page
     .evaluate(() => {
-      const g = (window as any).game
+      const w = window as unknown as WindowWithGame
+      const g = w.game as PhaserGameLike | undefined
       if (g && typeof g.destroy === 'function') g.destroy(true)
     })
     .catch(() => {})
@@ -17,7 +35,11 @@ export async function destroyGame(page: Page) {
 
 export async function waitForGameReady(page: Page) {
   await page.goto('/?e2e=1', { waitUntil: 'load' })
-  await page.waitForFunction(() => (window as any).game != null, { timeout: 45000 })
+  await page.waitForFunction(() => {
+    const w = window as unknown as WindowWithGame
+
+    return w.game != null
+  }, { timeout: 45000 })
   await expect(page.locator('#game-container')).toBeVisible({ timeout: 5000 })
   await expect(page.locator('canvas')).toBeVisible({ timeout: 5000 })
   await page.waitForTimeout(1000)
@@ -25,17 +47,33 @@ export async function waitForGameReady(page: Page) {
 
 export async function goToGame(page: Page) {
   await waitForGameReady(page)
-  await page.waitForFunction(() => (window as any).game?.scene?.isActive?.('MenuScene') === true, {
+  await page.waitForFunction(() => {
+    const w = window as unknown as WindowWithGame
+    const g = w.game as PhaserGameLike | undefined
+
+    return g?.scene?.isActive?.('MenuScene') === true
+  }, {
     timeout: 30000
   })
   await page.evaluate(() => {
-    const g = (window as any).game
-    if (g?.scene) g.scene.start('GameScene')
+    const w = window as unknown as WindowWithGame
+    const g = w.game as PhaserGameLike | undefined
+    if (g?.scene?.start) g.scene.start('GameScene')
   })
-  await page.waitForFunction(() => (window as any).game?.scene?.isActive?.('GameScene') === true, {
+  await page.waitForFunction(() => {
+    const w = window as unknown as WindowWithGame
+    const g = w.game as PhaserGameLike | undefined
+
+    return g?.scene?.isActive?.('GameScene') === true
+  }, {
     timeout: 15000
   })
-  await page.waitForFunction(() => (window as any).game?.scene?.isActive?.('UIScene') === true, {
+  await page.waitForFunction(() => {
+    const w = window as unknown as WindowWithGame
+    const g = w.game as PhaserGameLike | undefined
+
+    return g?.scene?.isActive?.('UIScene') === true
+  }, {
     timeout: 10000
   })
   await page.waitForTimeout(800)
@@ -71,9 +109,10 @@ export async function canvasClickAt(page: Page, gameX: number, gameY: number) {
 export async function movePlayerTo(page: Page, x: number, y: number) {
   await page.evaluate(
     ({ x, y }) => {
-      const g = (window as any).game
-      const scene = g?.scene?.getScene('GameScene')
-      const player = scene?.player
+      const w = window as unknown as WindowWithGame
+      const g = w.game as PhaserGameLike | undefined
+      const scene = g?.scene?.getScene?.('GameScene') as { player?: unknown } | undefined
+      const player = scene?.player as { x: number; y: number } | undefined
       if (player) {
         player.x = x
         player.y = y
@@ -93,7 +132,12 @@ export async function pressKey(page: Page, key: string, holdMs = 80) {
 
 export async function startNpcDialogue(page: Page) {
   await pressKey(page, 'e')
-  await page.waitForFunction(() => (window as any).game?.scene?.isPaused?.('GameScene') === true, {
+  await page.waitForFunction(() => {
+    const w = window as unknown as WindowWithGame
+    const g = w.game as PhaserGameLike | undefined
+
+    return g?.scene?.isPaused?.('GameScene') === true
+  }, {
     timeout: 10000
   })
   await page.waitForTimeout(250)
@@ -101,7 +145,13 @@ export async function startNpcDialogue(page: Page) {
 
 export async function getDialogueText(page: Page) {
   return await page.evaluate(() => {
-    const ui = (window as any).game?.scene?.getScene('UIScene') as any
+    const w = window as unknown as WindowWithGame
+    const g = w.game as PhaserGameLike | undefined
+    const ui = g?.scene?.getScene?.('UIScene') as {
+      speakerText?: { text?: string }
+      dialogueText?: { text?: string }
+    } | undefined
+
     return {
       speaker: ui?.speakerText?.text ?? '',
       text: ui?.dialogueText?.text ?? ''
@@ -119,11 +169,20 @@ export async function pressSpaceToNextLine(page: Page, times = 1) {
 export async function selectChoiceByIncludes(page: Page, includes: string) {
   await page.evaluate(
     ({ includes }) => {
-      const ui = (window as any).game?.scene?.getScene('UIScene') as any
-      const idx = (ui?.currentChoices ?? []).findIndex((c: any) => String(c?.text ?? '').includes(includes))
-      if (idx >= 0) {
+      const w = window as unknown as WindowWithGame
+      const g = w.game as PhaserGameLike | undefined
+      const ui = g?.scene?.getScene?.('UIScene') as {
+        currentChoices?: Array<{ text?: string }>
+        selectedChoiceIndex?: number
+        confirmChoiceSelection?: () => void
+      } | undefined
+
+      const idx = (ui?.currentChoices ?? []).findIndex((c) =>
+        String(c?.text ?? '').includes(includes)
+      )
+      if (ui && idx >= 0) {
         ui.selectedChoiceIndex = idx
-        ui.confirmChoiceSelection()
+        ui.confirmChoiceSelection?.()
       }
     },
     { includes }
