@@ -1,11 +1,13 @@
 import Phaser from 'phaser'
-import type { Dialogue, DialogueChoice, ItemData, AIContext } from '../types'
+import type { Dialogue, DialogueChoice, ItemData, AIContext, QuestData } from '../types'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
 import { SaveManager } from '../managers/Save'
 import { AIDialogueManager } from '../managers/AIDialogue'
 import { LocationManager } from '../managers/LocationManager'
+import { ToastManager } from '../managers/Toast'
+import type { ToastPayload } from '../managers/Toast'
 import { CAREER_LEVELS, COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config'
 import { getAllCareerPaths, getCareerPath } from '../data/careerPaths'
 
@@ -24,6 +26,7 @@ export class UIScene extends Phaser.Scene {
   private questManager!: QuestManager
   private saveManager!: SaveManager
   private aiManager!: AIDialogueManager
+  private toastManager!: ToastManager
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -44,6 +47,9 @@ export class UIScene extends Phaser.Scene {
   private readonly HUD_Y = GAME_HEIGHT - 95
   private readonly HUD_H = 95
   private readonly SECTION_W = 420
+
+  private toastQueues: Map<string, ToastPayload[]> = new Map()
+  private activeToasts: Map<string, Phaser.GameObjects.Text> = new Map()
 
   private isAIMode = false
   private aiConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
@@ -274,6 +280,7 @@ export class UIScene extends Phaser.Scene {
     this.saveManager = SaveManager.getInstance(this.game)
     this.locationManager = LocationManager.getInstance(this.game)
     this.aiManager = AIDialogueManager.getInstance()
+    this.toastManager = ToastManager.getInstance(this.game)
 
     this.createHUDBackground()
     this.createStatusBar()
@@ -283,6 +290,22 @@ export class UIScene extends Phaser.Scene {
     this.createInventoryBox()
     this.setupEventListeners()
     this.setupInput()
+  }
+
+  shutdown() {
+    this.game.events.off('startDialogue', this.startDialogue, this)
+    this.game.events.off('stressChanged', this.onStressChanged, this)
+    this.game.events.off('respectChanged', this.onRespectChanged, this)
+    this.game.events.off('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.off('gameOver', this.onGameOver, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.game.events.off('questStarted', this.onQuestStarted, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('uiToast', this.onToast, this)
+
+    this.inventoryKey?.off('down', this.toggleInventory, this)
+    this.saveKey?.off('down', this.saveGame, this)
   }
 
   private setupInput() {
@@ -296,24 +319,94 @@ export class UIScene extends Phaser.Scene {
   private saveGame() {
     const success = this.saveManager.save()
     if (success) {
-      this.showSaveMessage('Игра сохранена')
+      this.toastManager.show({ text: 'Игра сохранена', variant: 'success', durationMs: 4000 })
     } else {
-      this.showSaveMessage('Ошибка сохранения')
+      this.toastManager.show({ text: 'Ошибка сохранения', variant: 'danger' })
     }
   }
 
-  private showSaveMessage(text: string, durationMs = 2000) {
-    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, text, {
+  private onToast(payload: ToastPayload) {
+    const variant = payload.variant ?? 'info'
+    const queue = this.toastQueues.get(variant) ?? []
+    queue.push(payload)
+    this.toastQueues.set(variant, queue)
+    this.showNextToastForVariant(variant)
+  }
+
+  private showNextToastForVariant(variant: string) {
+    if (this.activeToasts.has(variant)) return
+
+    const queue = this.toastQueues.get(variant)
+    const next = queue?.shift()
+    if (!next) return
+
+    const durationMs = next.durationMs ?? 2000
+
+    let textColor = '#dfe6e9'
+    let bgColor = '#0a0a18cc'
+    if (variant === 'success') {
+      textColor = '#00b894'
+    }
+    if (variant === 'warning') {
+      textColor = '#fdcb6e'
+    }
+    if (variant === 'danger') {
+      textColor = '#ff7675'
+    }
+
+    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, next.text, {
       fontSize: '15px',
-      color: '#00b894',
-      backgroundColor: '#0a0a18cc',
-      padding: { x: 12, y: 6 },
+      color: textColor,
+      backgroundColor: bgColor,
+      padding: { x: 12, y: 6 }
     })
     msg.setDepth(300)
     msg.setOrigin(0.5)
-    
+    msg.setAlpha(0)
+
+    this.activeToasts.set(variant, msg)
+    this.layoutActiveToasts()
+
+    this.tweens.add({
+      targets: msg,
+      alpha: 1,
+      duration: 140,
+      ease: 'Sine.easeOut'
+    })
+
     this.time.delayedCall(durationMs, () => {
-      msg.destroy()
+      this.tweens.add({
+        targets: msg,
+        alpha: 0,
+        duration: 140,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          msg.destroy()
+          this.activeToasts.delete(variant)
+          this.layoutActiveToasts()
+          this.showNextToastForVariant(variant)
+        }
+      })
+    })
+  }
+
+  private layoutActiveToasts() {
+    const order = ['danger', 'warning', 'success', 'info']
+    const variants = Array.from(this.activeToasts.keys()).sort((a, b) => {
+      const ia = order.indexOf(a)
+      const ib = order.indexOf(b)
+      const ra = ia >= 0 ? ia : order.length
+      const rb = ib >= 0 ? ib : order.length
+
+      return ra - rb
+    })
+
+    const baseY = this.HUD_Y - 30
+    const gap = 34
+    variants.forEach((v, idx) => {
+      const msg = this.activeToasts.get(v)
+      if (!msg) return
+      msg.setPosition(GAME_WIDTH / 2, baseY - idx * gap)
     })
   }
 
@@ -749,18 +842,37 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('questStarted', this.onQuestStarted, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('locationChanged', this.onLocationChanged, this)
+    this.game.events.on('uiToast', this.onToast, this)
   }
 
-  private onQuestStarted() {
+  private onQuestStarted(quest?: QuestData) {
     this.updateQuestPanel()
+    if (quest?.title) {
+      this.toastManager.show({
+        text: `Квест начат: ${quest.title}`,
+        variant: 'info',
+        durationMs: 4000
+      })
+    }
   }
 
-  private onQuestCompleted() {
+  private onQuestCompleted(quest?: QuestData) {
     this.updateQuestPanel()
+    if (quest?.title) {
+      this.toastManager.show({
+        text: `Квест выполнен: ${quest.title}`,
+        variant: 'success',
+        durationMs: 4000
+      })
+    }
   }
 
-  private onLocationChanged() {
+  private onLocationChanged(payload?: { locationData?: { name?: string } }) {
     this.drawMinimap()
+    const name = payload?.locationData?.name
+    if (name) {
+      this.toastManager.show({ text: `${name}`, variant: 'info', durationMs: 1800 })
+    }
   }
 
   private onItemAdded() {
@@ -1272,7 +1384,7 @@ export class UIScene extends Phaser.Scene {
       if (careerChanged) {
         this.updateBars()
         if (careerToastText) {
-          this.showSaveMessage(careerToastText, 4000)
+          this.toastManager.show({ text: careerToastText, variant: 'success', durationMs: 4000 })
         }
       }
     }
