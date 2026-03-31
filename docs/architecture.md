@@ -85,7 +85,7 @@ spg-office-game/
 │   │   ├── LocationManager.ts
 │   │   ├── Save.ts
 │   │   ├── AIDialogue.ts
-│   │   ├── Assessment.ts    # Ассесменты (планируется)
+│   │   ├── Assessment.ts    # Ассесменты
 │   │   ├── SkillInsights.ts # Skill Insights по competencyTags
 │   │   ├── Multiplayer.ts   # WebSocket клиент (планируется)
 │   │   └── Achievement.ts   # Достижения (планируется)

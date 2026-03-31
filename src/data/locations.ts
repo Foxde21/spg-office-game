@@ -204,6 +204,24 @@ export const LOCATIONS: Record<LocationId, LocationData> = {
                 speaker: 'Петя Сеньор',
                 text: 'AI — тема мощная. Только не пытайся "впихнуть" модель туда, где хватит правила. Договорились?',
               },
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Хочешь небольшой ассесмент? Пара вопросов, и станет понятнее, что качать дальше.',
+                choices: [
+                  {
+                    text: 'Давай',
+                    action: 'openAssessmentDomainSelect'
+                  },
+                  {
+                    text: 'Не сегодня',
+                    nextDialogue: 'petya-intro'
+                  }
+                ]
+              },
+              {
+                speaker: 'Петя Сеньор',
+                text: 'Окей. Если захочешь — подходи снова.',
+              },
             ],
           },
         ],

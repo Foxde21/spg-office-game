@@ -18,52 +18,52 @@ export const SOFTWARE_DEV_SKILL_MATRIX: SkillMatrix = {
   items: {
     'process.sdlc': {
       tag: 'process.sdlc',
-      title: 'Software development process knowledge',
+      title: 'Знание процесса разработки программного обеспечения',
       expectations: {
-        junior: 'Follow defined software development process under supervision.',
-        middle: 'Follow process with minimal supervision; intermediate SDLC knowledge.',
-        senior: 'Follow and improve processes; advanced SDLC knowledge; introduce tools and approaches.',
-        expert: 'Setup and improve processes; evaluate, define and introduce tools and approaches.'
+        junior: 'Следуйте установленному процессу разработки программного обеспечения под наблюдением.',
+        middle: 'Следуйте процессу разработки ПО с минимальным контролем; знание жизненного цикла разработки ПО на среднем уровне.',
+        senior: 'Отслеживание и совершенствование процессов; углублённые знания жизненного цикла разработки программного обеспечения; внедрение инструментов и подходов.',
+        expert: 'Разработка и совершенствование процессов разработки ПО; оценка, определение и внедрение инструментов и подходов.'
       }
     },
     documentation: {
       tag: 'documentation',
-      title: 'Documentation skills',
+      title: 'Навыки ведения документации',
       expectations: {
-        junior: 'Understand and follow project requirements, solution design and technical documentation.',
-        middle: 'Create technical documentation of own code.',
-        senior: 'Create high-quality architecture diagrams; perform functional requirement reviews.',
-        expert: 'Create system-level documentation, non-functional requirements and audit documentation.'
+        junior: 'Понимать и соблюдать требования проекта, проектное решение и техническую документацию.',
+        middle: 'Создание технической документации к собственному коду.',
+        senior: 'Создание высококачественных архитектурных схем; проведение анализа функциональных требований.',
+        expert: 'Создание системной документации, нефункциональных требований и документации для аудита.'
       }
     },
     autonomy: {
       tag: 'autonomy',
-      title: 'Reliability & Autonomy',
+      title: 'Надежность и автономность',
       expectations: {
-        junior: 'Work effectively under supervision.',
-        middle: 'Implement functionality with minimal supervision; write unit/integration tests.',
-        senior: 'Work without supervision; own subsystems; offer improvements; interview candidates.',
-        expert: 'Technical supervisor; responsible for delivery; introduce architecture/process improvements.'
+        junior: 'Эффективно работать под руководством.',
+        middle: 'Реализация функциональности с минимальным контролем; написание модульных/интеграционных тестов.',
+        senior: 'Работать без надзора; отвечать за подсистемы; предлагать улучшения; проводить собеседования с кандидатами.',
+        expert: 'Технический руководитель; отвечает за выполнение задач; внедряет улучшения в архитектуру/процессы.'
       }
     },
     quality: {
       tag: 'quality',
-      title: 'Quality',
+      title: 'Качество кода',
       expectations: {
-        junior: 'Be responsible for own code quality.',
-        middle: 'Create deliverables in good quality.',
-        senior: 'Deliver high-quality results and be a role model.',
-        expert: 'Be responsible for quality of others and deliver excellent-quality results.'
+        junior: 'Нести ответственность за качество собственного кода.',
+        middle: 'Создавайте качественные результаты работы.',
+        senior: 'Достигайте высококачественных результатов и будьте образцом для подражания.',
+        expert: 'Несите ответственность за качество работы других и добивайтесь превосходных результатов.'
       }
     },
     'customer.relations': {
       tag: 'customer.relations',
-      title: 'Customer relations',
+      title: 'Отношения с клиентами',
       expectations: {
-        junior: 'Not expected to communicate with customers.',
-        middle: 'Participate in calls; may visit customers under supervision.',
-        senior: 'Have good customer skills; visit customers independently.',
-        expert: 'Build trusted relationships and drive discussions.'
+        junior: 'Общение с клиентами не ожидается.',
+        middle: 'Участвовать в телефонных звонках; под наблюдением может посещать клиентов.',
+        senior: 'Обладать хорошими навыками работы с клиентами; посещать клиентов самостоятельно.',
+        expert: 'Выстраивайте доверительные отношения и инициируйте дискуссии.'
       }
     }
   }

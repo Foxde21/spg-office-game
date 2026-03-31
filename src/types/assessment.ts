@@ -3,6 +3,7 @@ export interface CareerPathLevel {
   title: string
   minAvgScore: number
   minDomainScore: number
+  minDomainsAttempted?: number
 }
 
 export interface NPCAssessorConfig {
