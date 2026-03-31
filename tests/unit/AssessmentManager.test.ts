@@ -167,9 +167,7 @@ describe('AssessmentManager', () => {
     manager.setCareerPath('ai')
 
     const state = manager.getAssessmentState()
-    for (const domainId of Object.keys(state.careerPathProgress.domainProgress)) {
-      state.careerPathProgress.domainProgress[domainId].score = 90
-    }
+    state.careerPathProgress.currentLevel = 'ai-architect'
 
     manager.loadState(state)
 
@@ -267,6 +265,125 @@ describe('AssessmentManager', () => {
     expect(q2.id).not.toBe(q1.id)
   })
 
+  it('requires minDomainsAttempted to level up (ai-junior -> ai-middle)', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'ai-junior'
+    state.careerPathProgress.domainProgress['ml-fundamentals'].score = 80
+    state.careerPathProgress.domainProgress['ml-fundamentals'].answeredQuestions = ['q1']
+    state.careerPathProgress.domainProgress['data-engineering'].score = 80
+    state.careerPathProgress.domainProgress['data-engineering'].answeredQuestions = ['q2']
+    manager.loadState(state)
+
+    expect(manager.canLevelUp()).toBe(true)
+    expect(manager.promote()).toBe(true)
+    expect(manager.getCurrentLevel().id).toBe('ai-middle')
+  })
+
+  it('promote advances only one level even when higher levels are eligible', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'ai-middle'
+    const attempted = ['ml-fundamentals', 'data-engineering', 'deep-learning', 'nlp-llms', 'mlops', 'system-design']
+    for (const domainId of attempted) {
+      state.careerPathProgress.domainProgress[domainId].score = 95
+      state.careerPathProgress.domainProgress[domainId].answeredQuestions = [`${domainId}-q`]
+    }
+    manager.loadState(state)
+
+    expect(manager.canLevelUp()).toBe(true)
+    expect(manager.promote()).toBe(true)
+    expect(manager.getCurrentLevel().id).toBe('ai-senior')
+  })
+
+  it('rebuilds question pool after promotion so new level questions become available', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const s1 = manager.startAssessmentSession('ml-fundamentals', 6)
+    expect(s1.questions.length).toBe(3)
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'ai-junior'
+    state.careerPathProgress.domainProgress['ml-fundamentals'].score = 80
+    state.careerPathProgress.domainProgress['ml-fundamentals'].answeredQuestions = ['q1']
+    state.careerPathProgress.domainProgress['data-engineering'].score = 80
+    state.careerPathProgress.domainProgress['data-engineering'].answeredQuestions = ['q2']
+    manager.loadState(state)
+
+    expect(manager.promote()).toBe(true)
+
+    const s2 = manager.startAssessmentSession('ml-fundamentals', 6)
+    expect(s2.questions.length).toBeGreaterThan(3)
+  })
+
+  it('resetDomainProgress clears answered questions and score', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.domainProgress['ml-fundamentals'].score = 55
+    state.careerPathProgress.domainProgress['ml-fundamentals'].answeredQuestions = ['q1']
+    manager.loadState(state)
+
+    expect(manager.resetDomainProgress('ml-fundamentals')).toBe(true)
+    expect(manager.getDomainProgress('ml-fundamentals').score).toBe(0)
+    expect(manager.getAssessmentState().careerPathProgress.domainProgress['ml-fundamentals'].answeredQuestions).toEqual([])
+  })
+
+  it('getLevelUpBlockers reports domains below min score and attempted domains requirement', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'ai-middle'
+    state.careerPathProgress.domainProgress['ml-fundamentals'].score = 95
+    state.careerPathProgress.domainProgress['ml-fundamentals'].answeredQuestions = ['q1']
+    state.careerPathProgress.domainProgress['data-engineering'].score = 20
+    state.careerPathProgress.domainProgress['data-engineering'].answeredQuestions = ['q2']
+    manager.loadState(state)
+
+    const blockers = manager.getLevelUpBlockers()
+    expect(blockers).toBeTruthy()
+    expect(blockers.nextLevelTitle).toBeTruthy()
+    expect(blockers.requiredAttemptedDomains).toBeGreaterThan(1)
+    expect(blockers.domainsBelowMin.length).toBeGreaterThan(0)
+  })
+
   it('reset clears chosen career path and progress', async () => {
     vi.resetModules()
     const mockGame = createMockGame()
@@ -287,5 +404,490 @@ describe('AssessmentManager', () => {
     expect(after.chosenCareerPathId).toBeUndefined()
     expect(after.careerPathProgress).toBeUndefined()
     expect(manager.getCareerPath()).toBeNull()
+  })
+
+  it('does not use next-level topic questions before promote (mock career path)', async () => {
+    vi.resetModules()
+
+    vi.doMock('../../src/data/careerPaths', () => {
+      return {
+        getCareerPath: (id: string) => {
+          if (id !== 'mock-levels') return undefined
+          return {
+            id: 'mock-levels',
+            name: 'Mock Levels',
+            description: 'Mock',
+            icon: 'mock',
+            levels: [
+              { id: 'l1', title: 'L1', minAvgScore: 0, minDomainScore: 0 },
+              { id: 'l2', title: 'L2', minAvgScore: 50, minDomainScore: 0, minDomainsAttempted: 1 }
+            ],
+            domains: [
+              {
+                id: 'd1',
+                name: 'D1',
+                description: 'D1',
+                icon: 'd1',
+                careerPathId: 'mock-levels',
+                topics: [
+                  {
+                    id: 't1',
+                    name: 'T1',
+                    level: 'l1',
+                    questions: [
+                      {
+                        id: 'q-l1',
+                        scenario: 's',
+                        question: 'q',
+                        choices: [
+                          { id: 'a', text: 'a', score: 0, feedback: 'f', competencyTags: [] },
+                          { id: 'b', text: 'b', score: 100, feedback: 'f', competencyTags: [] }
+                        ],
+                        explanation: 'e',
+                        domainId: 'd1',
+                        difficulty: 1
+                      }
+                    ]
+                  },
+                  {
+                    id: 't2',
+                    name: 'T2',
+                    level: 'l2',
+                    questions: [
+                      {
+                        id: 'q-l2',
+                        scenario: 's',
+                        question: 'q',
+                        choices: [
+                          { id: 'a', text: 'a', score: 0, feedback: 'f', competencyTags: [] },
+                          { id: 'b', text: 'b', score: 100, feedback: 'f', competencyTags: [] }
+                        ],
+                        explanation: 'e',
+                        domainId: 'd1',
+                        difficulty: 4
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            npcAssessors: []
+          }
+        }
+      }
+    })
+
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('mock-levels')
+
+    const q1 = manager.getNextQuestion('d1')
+    expect(q1).toBeTruthy()
+    expect(q1.id).toBe('q-l1')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'l2'
+    state.careerPathProgress.domainProgress.d1.score = 90
+    state.careerPathProgress.domainProgress.d1.answeredQuestions = ['q-l1']
+    manager.loadState(state)
+
+    const q2 = manager.getNextQuestion('d1')
+    expect(q2).toBeTruthy()
+    expect(q2.id).toBe('q-l2')
+
+    vi.doUnmock('../../src/data/careerPaths')
+  })
+
+  it('falls back to any unanswered question when difficulty filter yields no candidates (mock career path)', async () => {
+    vi.resetModules()
+
+    vi.doMock('../../src/data/careerPaths', () => {
+      return {
+        getCareerPath: (id: string) => {
+          if (id !== 'mock-fallback') return undefined
+          return {
+            id: 'mock-fallback',
+            name: 'Mock Fallback',
+            description: 'Mock',
+            icon: 'mock',
+            levels: [{ id: 'l1', title: 'L1', minAvgScore: 0, minDomainScore: 0 }],
+            domains: [
+              {
+                id: 'd1',
+                name: 'D1',
+                description: 'D1',
+                icon: 'd1',
+                careerPathId: 'mock-fallback',
+                topics: [
+                  {
+                    id: 't1',
+                    name: 'T1',
+                    level: 'l1',
+                    questions: [
+                      {
+                        id: 'q-only-hard',
+                        scenario: 's',
+                        question: 'q',
+                        choices: [
+                          { id: 'a', text: 'a', score: 0, feedback: 'f', competencyTags: [] },
+                          { id: 'b', text: 'b', score: 100, feedback: 'f', competencyTags: [] }
+                        ],
+                        explanation: 'e',
+                        domainId: 'd1',
+                        difficulty: 4
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            npcAssessors: []
+          }
+        }
+      }
+    })
+
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('mock-fallback')
+
+    const q = manager.getNextQuestion('d1')
+    expect(q).toBeTruthy()
+    expect(q.id).toBe('q-only-hard')
+
+    vi.doUnmock('../../src/data/careerPaths')
+  })
+
+  it('getLevelUpBlockers is scenario-accurate for avg and attempted domains constraints (mock career path)', async () => {
+    vi.resetModules()
+
+    vi.doMock('../../src/data/careerPaths', () => {
+      return {
+        getCareerPath: (id: string) => {
+          if (id !== 'mock-blockers') return undefined
+          return {
+            id: 'mock-blockers',
+            name: 'Mock Blockers',
+            description: 'Mock',
+            icon: 'mock',
+            levels: [
+              { id: 'l1', title: 'L1', minAvgScore: 0, minDomainScore: 0 },
+              { id: 'l2', title: 'L2', minAvgScore: 70, minDomainScore: 50, minDomainsAttempted: 2 }
+            ],
+            domains: [
+              { id: 'a', name: 'A', description: 'A', icon: 'a', careerPathId: 'mock-blockers', topics: [] },
+              { id: 'b', name: 'B', description: 'B', icon: 'b', careerPathId: 'mock-blockers', topics: [] }
+            ],
+            npcAssessors: []
+          }
+        }
+      }
+    })
+
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('mock-blockers')
+
+    let state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'l1'
+    state.careerPathProgress.domainProgress.a.score = 60
+    state.careerPathProgress.domainProgress.a.answeredQuestions = ['q1']
+    manager.loadState(state)
+
+    let blockers = manager.getLevelUpBlockers()
+    expect(blockers).toBeTruthy()
+    expect(blockers.attemptedBelowMin).toBe(true)
+
+    state = manager.getAssessmentState()
+    state.careerPathProgress.domainProgress.b.score = 10
+    state.careerPathProgress.domainProgress.b.answeredQuestions = ['q2']
+    manager.loadState(state)
+
+    blockers = manager.getLevelUpBlockers()
+    expect(blockers).toBeTruthy()
+    expect(blockers.attemptedBelowMin).toBe(false)
+    expect(blockers.avgBelowMin).toBe(true)
+    expect(blockers.domainsBelowMin.length).toBeGreaterThan(0)
+
+    vi.doUnmock('../../src/data/careerPaths')
+  })
+
+  it('canLevelUp is false when average score is below next level threshold (mock career path)', async () => {
+    vi.resetModules()
+
+    vi.doMock('../../src/data/careerPaths', () => {
+      return {
+        getCareerPath: (id: string) => {
+          if (id !== 'mock-avg') return undefined
+          return {
+            id: 'mock-avg',
+            name: 'Mock Avg',
+            description: 'Mock',
+            icon: 'mock',
+            levels: [
+              { id: 'l1', title: 'L1', minAvgScore: 0, minDomainScore: 0 },
+              { id: 'l2', title: 'L2', minAvgScore: 70, minDomainScore: 0, minDomainsAttempted: 1 }
+            ],
+            domains: [
+              { id: 'a', name: 'A', description: 'A', icon: 'a', careerPathId: 'mock-avg', topics: [] }
+            ],
+            npcAssessors: []
+          }
+        }
+      }
+    })
+
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('mock-avg')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'l1'
+    state.careerPathProgress.domainProgress.a.score = 10
+    state.careerPathProgress.domainProgress.a.answeredQuestions = ['q1']
+    manager.loadState(state)
+
+    expect(manager.canLevelUp()).toBe(false)
+    expect(manager.promote()).toBe(false)
+    expect(manager.getCurrentLevel().id).toBe('l1')
+
+    const blockers = manager.getLevelUpBlockers()
+    expect(blockers).toBeTruthy()
+    expect(blockers.avgBelowMin).toBe(true)
+
+    vi.doUnmock('../../src/data/careerPaths')
+  })
+
+  it('canLevelUp is false when not all attempted domains meet minDomainScore (mock career path)', async () => {
+    vi.resetModules()
+
+    vi.doMock('../../src/data/careerPaths', () => {
+      return {
+        getCareerPath: (id: string) => {
+          if (id !== 'mock-min-domain') return undefined
+          return {
+            id: 'mock-min-domain',
+            name: 'Mock Min Domain',
+            description: 'Mock',
+            icon: 'mock',
+            levels: [
+              { id: 'l1', title: 'L1', minAvgScore: 0, minDomainScore: 0 },
+              { id: 'l2', title: 'L2', minAvgScore: 0, minDomainScore: 50, minDomainsAttempted: 2 }
+            ],
+            domains: [
+              { id: 'a', name: 'A', description: 'A', icon: 'a', careerPathId: 'mock-min-domain', topics: [] },
+              { id: 'b', name: 'B', description: 'B', icon: 'b', careerPathId: 'mock-min-domain', topics: [] }
+            ],
+            npcAssessors: []
+          }
+        }
+      }
+    })
+
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('mock-min-domain')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'l1'
+    state.careerPathProgress.domainProgress.a.score = 100
+    state.careerPathProgress.domainProgress.a.answeredQuestions = ['qa']
+    state.careerPathProgress.domainProgress.b.score = 40
+    state.careerPathProgress.domainProgress.b.answeredQuestions = ['qb']
+    manager.loadState(state)
+
+    expect(manager.canLevelUp()).toBe(false)
+
+    const blockers = manager.getLevelUpBlockers()
+    expect(blockers).toBeTruthy()
+    expect(blockers.domainsBelowMin.map((d: any) => d.domainId)).toContain('b')
+
+    vi.doUnmock('../../src/data/careerPaths')
+  })
+
+  it('getLevelUpBlockers returns null at max level', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'ai-architect'
+    manager.loadState(state)
+
+    expect(manager.getLevelUpBlockers()).toBeNull()
+  })
+
+  it('resetDomainProgress makes previously answered question available again', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const rnd = vi.spyOn(Math, 'random').mockReturnValue(0)
+
+    const q1 = manager.getNextQuestion('ml-fundamentals')
+    expect(q1).toBeTruthy()
+    const bestChoice = q1.choices.reduce((best: any, c: any) => (c.score > best.score ? c : best), q1.choices[0])
+    manager.submitAnswer(q1.id, bestChoice.id)
+
+    expect(manager.getNextQuestion('ml-fundamentals')?.id).not.toBe(q1.id)
+
+    manager.resetDomainProgress('ml-fundamentals')
+
+    const qAgain = manager.getNextQuestion('ml-fundamentals')
+    expect(qAgain).toBeTruthy()
+    expect(qAgain.id).toBe(q1.id)
+
+    rnd.mockRestore()
+  })
+
+  it('submitAnswer updates domain score with deterministic smoothing (0.6/0.4)', async () => {
+    vi.resetModules()
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('ai')
+
+    const q = manager.getNextQuestion('ml-fundamentals')
+    const bestChoice = q.choices.reduce(
+      (best: any, c: any) => (c.score > best.score ? c : best),
+      q.choices[0]
+    )
+    const r1 = manager.submitAnswer(q.id, bestChoice.id)
+    const expected1 = 0 * 0.6 + bestChoice.score * 0.4
+
+    expect(Math.round(r1.newDomainScore)).toBe(Math.round(expected1))
+
+    const q2 = manager.getNextQuestion('ml-fundamentals')
+    const bestChoice2 = q2.choices.reduce(
+      (best: any, c: any) => (c.score > best.score ? c : best),
+      q2.choices[0]
+    )
+    const r2 = manager.submitAnswer(q2.id, bestChoice2.id)
+    const expected2 = expected1 * 0.6 + bestChoice2.score * 0.4
+
+    expect(Math.round(r2.newDomainScore)).toBe(Math.round(expected2))
+  })
+
+  it('topic gating falls back to first level when currentLevel is unknown (mock career path)', async () => {
+    vi.resetModules()
+
+    vi.doMock('../../src/data/careerPaths', () => {
+      return {
+        getCareerPath: (id: string) => {
+          if (id !== 'mock-unknown-level') return undefined
+          return {
+            id: 'mock-unknown-level',
+            name: 'Mock Unknown',
+            description: 'Mock',
+            icon: 'mock',
+            levels: [
+              { id: 'l1', title: 'L1', minAvgScore: 0, minDomainScore: 0 },
+              { id: 'l2', title: 'L2', minAvgScore: 0, minDomainScore: 0 }
+            ],
+            domains: [
+              {
+                id: 'd1',
+                name: 'D1',
+                description: 'D1',
+                icon: 'd1',
+                careerPathId: 'mock-unknown-level',
+                topics: [
+                  {
+                    id: 't1',
+                    name: 'T1',
+                    level: 'l1',
+                    questions: [
+                      {
+                        id: 'q-l1',
+                        scenario: 's',
+                        question: 'q',
+                        choices: [
+                          { id: 'a', text: 'a', score: 0, feedback: 'f', competencyTags: [] },
+                          { id: 'b', text: 'b', score: 100, feedback: 'f', competencyTags: [] }
+                        ],
+                        explanation: 'e',
+                        domainId: 'd1',
+                        difficulty: 1
+                      }
+                    ]
+                  },
+                  {
+                    id: 't2',
+                    name: 'T2',
+                    level: 'l2',
+                    questions: [
+                      {
+                        id: 'q-l2',
+                        scenario: 's',
+                        question: 'q',
+                        choices: [
+                          { id: 'a', text: 'a', score: 0, feedback: 'f', competencyTags: [] },
+                          { id: 'b', text: 'b', score: 100, feedback: 'f', competencyTags: [] }
+                        ],
+                        explanation: 'e',
+                        domainId: 'd1',
+                        difficulty: 1
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            npcAssessors: []
+          }
+        }
+      }
+    })
+
+    const mockGame = createMockGame()
+    const mod = await import('../../src/managers/Assessment')
+    const AssessmentManager = mod.AssessmentManager as any
+    AssessmentManager.instance = undefined
+
+    const manager = AssessmentManager.getInstance(mockGame as any)
+    manager.setCareerPath('mock-unknown-level')
+
+    const state = manager.getAssessmentState()
+    state.careerPathProgress.currentLevel = 'does-not-exist'
+    manager.loadState(state)
+
+    const q = manager.getNextQuestion('d1')
+    expect(q).toBeTruthy()
+    expect(q.id).toBe('q-l1')
+
+    vi.doUnmock('../../src/data/careerPaths')
   })
 })

@@ -8,7 +8,14 @@ import {
   pressSpaceToNextLine,
   selectChoiceByIncludes,
   startNpcDialogue,
+  type PhaserGameLike,
+  type WindowWithGame,
 } from './helpers'
+
+type GameStateLike = {
+  addRespect?: (amount: number) => void
+  reduceRespect?: (amount: number) => void
+}
 
 test.beforeEach(async ({ page }) => {
   await clearLocalStorage(page)
@@ -34,12 +41,20 @@ test.describe('Career paths scripted flow', () => {
     expect(d.text).toContain('Твоя первая задача')
 
     await page.keyboard.press('Escape')
-    await page.waitForFunction(() => (window as any).game?.scene?.isPaused?.('GameScene') === false, {
-      timeout: 10000
-    })
+    await page.waitForFunction(
+      () => {
+        const w = window as unknown as WindowWithGame
+        const g = w.game as PhaserGameLike | undefined
+
+        return g?.scene?.isPaused?.('GameScene') === false
+      },
+      { timeout: 10000 }
+    )
 
     await page.evaluate(() => {
-      const gs = (window as any).game?.registry?.get('gameState')
+      const w = window as unknown as WindowWithGame
+      const g = w.game as PhaserGameLike | undefined
+      const gs = g?.registry?.get?.('gameState') as GameStateLike | undefined
       if (gs?.addRespect) gs.addRespect(25)
     })
     await page.waitForTimeout(200)
@@ -61,9 +76,15 @@ test.describe('Career paths scripted flow', () => {
     expect(d.text).toContain('отличный выбор')
 
     await page.keyboard.press('Escape')
-    await page.waitForFunction(() => (window as any).game?.scene?.isPaused?.('GameScene') === false, {
-      timeout: 10000
-    })
+    await page.waitForFunction(
+      () => {
+        const w = window as unknown as WindowWithGame
+        const g = w.game as PhaserGameLike | undefined
+
+        return g?.scene?.isPaused?.('GameScene') === false
+      },
+      { timeout: 10000 }
+    )
 
     await movePlayerTo(page, 532, 320)
     await startNpcDialogue(page)
@@ -78,7 +99,9 @@ test.describe('Career paths scripted flow', () => {
     await goToGame(page)
 
     await page.evaluate(() => {
-      const gs = (window as any).game?.registry?.get('gameState')
+      const w = window as unknown as WindowWithGame
+      const g = w.game as PhaserGameLike | undefined
+      const gs = g?.registry?.get?.('gameState') as GameStateLike | undefined
       if (gs?.reduceRespect) gs.reduceRespect(100)
     })
     await page.waitForTimeout(200)

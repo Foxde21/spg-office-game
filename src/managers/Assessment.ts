@@ -32,6 +32,28 @@ function getAllowedDifficulties(domainScore: number): Array<1 | 2 | 3 | 4> {
   return [4]
 }
 
+function getAllowedTopicLevels(
+  careerPath: CareerPath,
+  currentLevelId: string
+): Set<string> {
+  const allowed: Set<string> = new Set()
+  const idx = careerPath.levels.findIndex((l) => l.id === currentLevelId)
+  if (idx < 0) {
+    if (careerPath.levels[0]) {
+      allowed.add(careerPath.levels[0].id)
+    }
+
+    return allowed
+  }
+
+  for (let i = 0; i <= idx; i++) {
+    const id = careerPath.levels[i]?.id
+    if (id) allowed.add(id)
+  }
+
+  return allowed
+}
+
 export class AssessmentManager {
   private static instance: AssessmentManager
   private game: Phaser.Game
@@ -110,7 +132,7 @@ export class AssessmentManager {
     }
 
     const requested = count ?? 3
-    const sessionCount = Math.max(3, Math.min(5, requested))
+    const sessionCount = Math.max(3, Math.min(6, requested))
 
     const selectedIds: Set<string> = new Set()
     const questions: AssessmentQuestion[] = []
@@ -143,6 +165,57 @@ export class AssessmentManager {
     })
 
     return this.currentSession
+  }
+
+  resetDomainProgress(domainId: string): boolean {
+    if (!this.state.careerPathProgress) return false
+    if (!this.state.careerPathProgress.domainProgress[domainId]) return false
+
+    this.state.careerPathProgress.domainProgress[domainId].answeredQuestions = []
+    this.state.careerPathProgress.domainProgress[domainId].score = 0
+    this.state.careerPathProgress.domainProgress[domainId].lastAssessmentDate = undefined
+    this.rebuildAnsweredQuestionIds()
+
+    return true
+  }
+
+  getLevelUpBlockers(): {
+    nextLevelTitle?: string
+    avgScore: number
+    attemptedDomains: number
+    requiredAttemptedDomains: number
+    domainsBelowMin: Array<{ domainId: string; score: number; required: number }>
+    avgBelowMin: boolean
+    attemptedBelowMin: boolean
+  } | null {
+    if (!this.careerPath || !this.state.careerPathProgress) return null
+
+    const levels = this.careerPath.levels
+    const currentId = this.state.careerPathProgress.currentLevel
+    const idx = levels.findIndex((l) => l.id === currentId)
+    if (idx < 0 || idx >= levels.length - 1) return null
+
+    const next = levels[idx + 1]
+    const avgScore = this.getAverageScore()
+    const progress = Object.values(this.state.careerPathProgress.domainProgress).filter(
+      (d) => (d.answeredQuestions?.length || 0) > 0
+    )
+    const requiredAttemptedDomains = next.minDomainsAttempted ?? 1
+    const attemptedDomains = progress.length
+
+    const domainsBelowMin = progress
+      .filter((d) => d.score < next.minDomainScore)
+      .map((d) => ({ domainId: d.domainId, score: d.score, required: next.minDomainScore }))
+
+    return {
+      nextLevelTitle: next.title,
+      avgScore,
+      attemptedDomains,
+      requiredAttemptedDomains,
+      domainsBelowMin,
+      avgBelowMin: avgScore < next.minAvgScore,
+      attemptedBelowMin: attemptedDomains < requiredAttemptedDomains
+    }
   }
 
   getNextQuestion(domainId: string): AssessmentQuestion | null {
@@ -190,11 +263,9 @@ export class AssessmentManager {
       answeredQuestions: []
     }
 
-    const oldLevel = this.calculateCurrentLevel()?.id
-
     const oldScore = domainProgress.score
     const answerScore = clampScore(choice.score)
-    const newScore = clampScore(oldScore * 0.8 + answerScore * 0.2)
+    const newScore = clampScore(oldScore * 0.6 + answerScore * 0.4)
 
     domainProgress.score = newScore
     domainProgress.lastAssessmentDate = Date.now()
@@ -235,18 +306,6 @@ export class AssessmentManager {
       oldScore,
       newScore
     })
-
-    const newLevel = this.calculateCurrentLevel()?.id
-    if (oldLevel && newLevel && oldLevel !== newLevel) {
-      progressState.currentLevel = newLevel
-      this.emit('careerLevelUp', {
-        careerPathId,
-        oldLevel,
-        newLevel
-      })
-    } else if (newLevel) {
-      progressState.currentLevel = newLevel
-    }
 
     const maxChoiceScore = Math.max(...question.choices.map((c) => c.score))
     const isCorrect = choice.score === maxChoiceScore
@@ -306,13 +365,9 @@ export class AssessmentManager {
       : 0
 
     const oldLevel = this.state.careerPathProgress.currentLevel
-    const newLevel = this.calculateCurrentLevel()?.id
+    const newLevel = this.calculateEligibleLevel()?.id
 
     const levelUp = Boolean(newLevel && oldLevel && newLevel !== oldLevel)
-
-    if (newLevel) {
-      this.state.careerPathProgress.currentLevel = newLevel
-    }
 
     const result: SessionResult = {
       careerPathId: session.careerPathId,
@@ -349,13 +404,19 @@ export class AssessmentManager {
   }
 
   getCurrentLevel(): CareerPathLevel | null {
-    if (!this.careerPath) return null
+    if (!this.careerPath || !this.state.careerPathProgress) return null
 
-    return this.calculateCurrentLevel()
+    const levelId = this.state.careerPathProgress.currentLevel
+    const found = this.careerPath.levels.find((l) => l.id === levelId)
+    if (found) return found
+
+    return this.careerPath.levels[0] || null
   }
 
   getAverageScore(): number {
-    const progress = Object.values(this.state.careerPathProgress?.domainProgress || {})
+    const progress = Object.values(this.state.careerPathProgress?.domainProgress || {}).filter(
+      (d) => (d.answeredQuestions?.length || 0) > 0
+    )
     if (progress.length === 0) return 0
 
     const sum = progress.reduce((acc, d) => acc + clampScore(d.score), 0)
@@ -367,7 +428,7 @@ export class AssessmentManager {
     if (!this.careerPath || !this.state.careerPathProgress) return false
 
     const levels = this.careerPath.levels
-    const currentId = this.calculateCurrentLevel()?.id
+    const currentId = this.state.careerPathProgress.currentLevel
     if (!currentId) return false
 
     const idx = levels.findIndex((l) => l.id === currentId)
@@ -375,7 +436,12 @@ export class AssessmentManager {
 
     const next = levels[idx + 1]
     const avg = this.getAverageScore()
-    const progress = Object.values(this.state.careerPathProgress.domainProgress)
+    const progress = Object.values(this.state.careerPathProgress.domainProgress).filter(
+      (d) => (d.answeredQuestions?.length || 0) > 0
+    )
+    if (progress.length === 0) return false
+    const minDomainsAttempted = next.minDomainsAttempted ?? 1
+    if (progress.length < minDomainsAttempted) return false
     const allDomainsAboveMin = progress.every((d) => d.score >= next.minDomainScore)
 
     return avg >= next.minAvgScore && allDomainsAboveMin
@@ -384,11 +450,17 @@ export class AssessmentManager {
   promote(): boolean {
     if (!this.canLevelUp() || !this.state.careerPathProgress) return false
 
+    if (!this.careerPath) return false
+
     const oldLevel = this.state.careerPathProgress.currentLevel
-    const newLevel = this.calculateCurrentLevel()?.id
+    const idx = this.careerPath.levels.findIndex((l) => l.id === oldLevel)
+    if (idx < 0 || idx >= this.careerPath.levels.length - 1) return false
+
+    const newLevel = this.careerPath.levels[idx + 1].id
     if (!newLevel || newLevel === oldLevel) return false
 
     this.state.careerPathProgress.currentLevel = newLevel
+    this.rebuildQuestionsIndex()
     this.emit('careerLevelUp', {
       careerPathId: this.state.careerPathProgress.careerPathId,
       oldLevel,
@@ -439,15 +511,7 @@ export class AssessmentManager {
 
     this.rebuildQuestionsIndex()
 
-    const answered: Set<string> = new Set()
-    const progress = this.state.careerPathProgress?.domainProgress || {}
-    for (const d of Object.values(progress)) {
-      for (const qid of d.answeredQuestions) {
-        answered.add(qid)
-      }
-    }
-
-    this.answeredQuestionIds = answered
+    this.rebuildAnsweredQuestionIds()
   }
 
   reset(): void {
@@ -460,17 +524,34 @@ export class AssessmentManager {
     this.sessionDomainScoreBefore = null
   }
 
-  private calculateCurrentLevel(): CareerPathLevel | null {
+  private rebuildAnsweredQuestionIds(): void {
+    const answered: Set<string> = new Set()
+    const progress = this.state.careerPathProgress?.domainProgress || {}
+    for (const d of Object.values(progress)) {
+      for (const qid of d.answeredQuestions) {
+        answered.add(qid)
+      }
+    }
+
+    this.answeredQuestionIds = answered
+  }
+
+  private calculateEligibleLevel(): CareerPathLevel | null {
     if (!this.careerPath || !this.state.careerPathProgress) return null
 
     const levels = this.careerPath.levels
     if (levels.length === 0) return null
 
     const avgScore = this.getAverageScore()
-    const progress = Object.values(this.state.careerPathProgress.domainProgress)
+    const progress = Object.values(this.state.careerPathProgress.domainProgress).filter(
+      (d) => (d.answeredQuestions?.length || 0) > 0
+    )
+    if (progress.length === 0) return null
 
     for (let i = levels.length - 1; i >= 0; i--) {
       const level = levels[i]
+      const minDomainsAttempted = level.minDomainsAttempted ?? 1
+      if (progress.length < minDomainsAttempted) continue
       const allDomainsAboveMin = progress.every((d) => d.score >= level.minDomainScore)
 
       if (avgScore >= level.minAvgScore && allDomainsAboveMin) {
@@ -485,11 +566,15 @@ export class AssessmentManager {
     this.questionsByDomain = new Map()
     this.questionsById = new Map()
 
-    if (!this.careerPath) return
+    if (!this.careerPath || !this.state.careerPathProgress) return
+
+    const currentLevel = this.state.careerPathProgress.currentLevel
+    const allowedLevels = getAllowedTopicLevels(this.careerPath, currentLevel)
 
     for (const domain of this.careerPath.domains) {
       const questions: AssessmentQuestion[] = []
       for (const topic of domain.topics) {
+        if (!allowedLevels.has(topic.level)) continue
         for (const q of topic.questions) {
           questions.push(q)
           this.questionsById.set(q.id, q)
@@ -520,7 +605,11 @@ export class AssessmentManager {
 
     const allowed = new Set(getAllowedDifficulties(domainScore))
 
-    const candidates = pool.filter((q) => !excluded.has(q.id) && allowed.has(q.difficulty))
+    let candidates = pool.filter((q) => !excluded.has(q.id) && allowed.has(q.difficulty))
+    if (candidates.length === 0) {
+      candidates = pool.filter((q) => !excluded.has(q.id))
+    }
+
     if (candidates.length === 0) return null
 
     const idx = Math.floor(Math.random() * candidates.length)

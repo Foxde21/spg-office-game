@@ -10,6 +10,10 @@ export interface DialogueChoice {
   text: string
   nextDialogue?: string
   action?: string
+  startAssessment?: {
+    domainId: string
+    questionCount?: number
+  }
   stressChange?: number
   respectChange?: number
   giveItem?: string

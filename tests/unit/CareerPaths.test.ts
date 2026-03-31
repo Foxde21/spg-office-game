@@ -125,12 +125,11 @@ describe('AI_CAREER_PATH', () => {
     expect(npcIds).toContain('professor-neuronov')
   })
 
-  it('stub domains have empty topics', () => {
-    const stubIds = ['data-engineering', 'deep-learning', 'nlp-llms', 'computer-vision', 'mlops', 'system-design', 'ai-ethics']
-    for (const id of stubIds) {
-      const domain = AI_CAREER_PATH.domains.find(d => d.id === id)
-      expect(domain).toBeDefined()
-      expect(domain!.topics).toEqual([])
+  it('each AI domain has topics for all 4 levels', () => {
+    for (const domain of AI_CAREER_PATH.domains) {
+      expect(domain.topics).toHaveLength(4)
+      const levelIds = domain.topics.map(t => t.level)
+      expect(levelIds).toEqual(['ai-junior', 'ai-middle', 'ai-senior', 'ai-architect'])
     }
   })
 })
