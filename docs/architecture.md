@@ -171,6 +171,43 @@ interface GameState {
 - Achievement popup (toast)
 - Chat input + kitchen chat panel
 
+#### Toast notifications (тосты)
+
+Тосты используются для кратких уведомлений (квесты, сохранение, повышение грейда, разблокировки модулей и т.д.).
+
+Компоненты:
+
+- `ToastManager` (`src/managers/Toast.ts`) — singleton, единая точка отправки тостов.
+- `UIScene` — UI-рендер и очередь тостов, подписывается на событие `uiToast` через `this.game.events`.
+
+Формат события:
+
+```typescript
+export type ToastVariant = 'info' | 'success' | 'warning' | 'danger'
+
+export interface ToastPayload {
+  text: string
+  variant?: ToastVariant
+  durationMs?: number
+}
+```
+
+Поведение:
+
+- В `UIScene` тосты группируются по `variant` в отдельные очереди.
+- **Два тоста одного `variant` не показываются одновременно** — если тост этого `variant` уже активен, следующий остаётся в очереди до завершения анимации и тайм-аута.
+- Одновременно могут отображаться тосты разных `variant`; они выстраиваются вертикально.
+
+Как добавить новый тост:
+
+1. Получи менеджер: `const toast = ToastManager.getInstance(this.game)`
+2. Вызови `toast.show({ text: '...', variant: 'success', durationMs: 4000 })`
+
+Рекомендации:
+
+- Не эмить `uiToast` напрямую из игровой логики — используй `ToastManager.show`, чтобы поведение было единообразным.
+- Если тост вызывается из `Scene.create()`, убедись, что подписки на `game.events` не накапливаются при рестартах сцен (используй `.off()` перед `.on()` и cleanup на `SHUTDOWN/DESTROY`).
+
 ### MiniGameScene (базовый класс, планируется)
 - Общий lifecycle: инструкции → игра → результат
 - Timer, score, rewards

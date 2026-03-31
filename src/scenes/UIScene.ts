@@ -56,6 +56,9 @@ export class UIScene extends Phaser.Scene {
       }
     | null = null
 
+  private knownAssessmentDomainIds: Set<string> = new Set()
+  private assessmentDomainsInitialized = false
+
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
   private statusText!: Phaser.GameObjects.Text
@@ -809,6 +812,9 @@ export class UIScene extends Phaser.Scene {
     this.aiManager = AIDialogueManager.getInstance()
     this.toastManager = ToastManager.getInstance(this.game)
 
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onSceneShutdown, this)
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.onSceneShutdown, this)
+
     this.createHUDBackground()
     this.createStatusBar()
     this.createMinimap()
@@ -819,7 +825,7 @@ export class UIScene extends Phaser.Scene {
     this.setupInput()
   }
 
-  shutdown() {
+  private onSceneShutdown() {
     this.game.events.off('startDialogue', this.startDialogue, this)
     this.game.events.off('stressChanged', this.onStressChanged, this)
     this.game.events.off('respectChanged', this.onRespectChanged, this)
@@ -830,9 +836,16 @@ export class UIScene extends Phaser.Scene {
     this.game.events.off('questCompleted', this.onQuestCompleted, this)
     this.game.events.off('locationChanged', this.onLocationChanged, this)
     this.game.events.off('uiToast', this.onToast, this)
+    this.game.events.off('domainProgressChanged', this.onDomainProgressChanged, this)
 
     this.inventoryKey?.off('down', this.toggleInventory, this)
     this.saveKey?.off('down', this.saveGame, this)
+
+    this.activeToasts.forEach((t) => t.destroy())
+    this.activeToasts.clear()
+    this.toastQueues.clear()
+    this.knownAssessmentDomainIds.clear()
+    this.assessmentDomainsInitialized = false
   }
 
   private setupInput() {
@@ -858,6 +871,38 @@ export class UIScene extends Phaser.Scene {
     queue.push(payload)
     this.toastQueues.set(variant, queue)
     this.showNextToastForVariant(variant)
+  }
+
+  private onDomainProgressChanged() {
+    this.refreshAssessmentModules(true)
+  }
+
+  private refreshAssessmentModules(showToasts: boolean) {
+    const assessment = this.getAssessmentManager()
+    if (!assessment) return
+
+    const domains = assessment.getAvailableDomains()
+    if (domains.length === 0) return
+
+    if (!this.assessmentDomainsInitialized) {
+      domains.forEach((d) => this.knownAssessmentDomainIds.add(d.id))
+      this.assessmentDomainsInitialized = true
+
+      return
+    }
+
+    const newDomains = domains.filter((d) => !this.knownAssessmentDomainIds.has(d.id))
+    if (showToasts && newDomains.length > 0) {
+      newDomains.forEach((d) => {
+        this.toastManager.show({
+          text: `Открыт новый модуль: ${d.name}`,
+          variant: 'success',
+          durationMs: 4000
+        })
+      })
+    }
+
+    domains.forEach((d) => this.knownAssessmentDomainIds.add(d.id))
   }
 
   private showNextToastForVariant(variant: string) {
@@ -1359,6 +1404,18 @@ export class UIScene extends Phaser.Scene {
   }
 
   private setupEventListeners() {
+    this.game.events.off('startDialogue', this.startDialogue, this)
+    this.game.events.off('stressChanged', this.onStressChanged, this)
+    this.game.events.off('respectChanged', this.onRespectChanged, this)
+    this.game.events.off('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.off('gameOver', this.onGameOver, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.game.events.off('questStarted', this.onQuestStarted, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('uiToast', this.onToast, this)
+    this.game.events.off('domainProgressChanged', this.onDomainProgressChanged, this)
+
     this.game.events.on('startDialogue', this.startDialogue, this)
     this.game.events.on('stressChanged', this.onStressChanged, this)
     this.game.events.on('respectChanged', this.onRespectChanged, this)
@@ -1369,6 +1426,9 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('locationChanged', this.onLocationChanged, this)
     this.game.events.on('uiToast', this.onToast, this)
+    this.game.events.on('domainProgressChanged', this.onDomainProgressChanged, this)
+
+    this.refreshAssessmentModules(false)
   }
 
   private onQuestStarted(quest?: QuestData) {
@@ -1428,9 +1488,24 @@ export class UIScene extends Phaser.Scene {
     this.updateBars()
   }
 
-  private onCareerLevelUp(data: { level: string }) {
+  private onCareerLevelUp(payload: unknown) {
+    const data = payload as { level?: string; newLevel?: string }
+    const levelId = data.newLevel ?? data.level
+    if (!levelId) return
+
+    this.gameState.setCareerLevel(levelId)
+
+
+    if (levelId !== 'lead') {
+      this.toastManager.show({
+        text: `Повышение! Теперь ты - ${this.getCareerTitle()?.title || levelId}`,
+        variant: 'success',
+        durationMs: 4000
+      })
+    }
+
     this.updateBars()
-    if (data.level === 'lead') {
+    if (levelId === 'lead') {
       this.scene.stop('GameScene')
       this.scene.stop('UIScene')
       this.scene.start('VictoryScene')
@@ -2029,6 +2104,9 @@ export class UIScene extends Phaser.Scene {
             this.gameState.setCareerPath(pathId)
             careerChanged = true
 
+            this.knownAssessmentDomainIds.clear()
+            this.assessmentDomainsInitialized = false
+
             this.gameState.setFlag(`careerPath:${pathId}`, true)
 
             const path = getAllCareerPaths().find((p) => p.id === pathId)
@@ -2039,6 +2117,8 @@ export class UIScene extends Phaser.Scene {
               if (assessment && typeof (assessment as { setCareerPath?: unknown }).setCareerPath === 'function') {
                 ;(assessment as { setCareerPath: (id: string) => void }).setCareerPath(pathId)
               }
+
+              this.refreshAssessmentModules(false)
 
               if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
                 const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
