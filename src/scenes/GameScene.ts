@@ -18,6 +18,10 @@ export class GameScene extends Phaser.Scene {
     up: false,
     down: false
   }
+  private keyDownHandler?: (ev: KeyboardEvent) => void
+  private keyUpHandler?: (ev: KeyboardEvent) => void
+  private escKey?: Phaser.Input.Keyboard.Key
+  private escHandler?: () => void
   private npcs: NPC[] = []
   private items: Item[] = []
   private doors: Door[] = []
@@ -41,6 +45,9 @@ export class GameScene extends Phaser.Scene {
     this.locationManager = LocationManager.getInstance(this.game)
     this.saveManager = SaveManager.getInstance(this.game)
     this.gameState = GameStateManager.getInstance(this.game)
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onSceneShutdown, this)
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.onSceneShutdown, this)
     
     this.decorColliders = this.physics.add.staticGroup()
     this.createPlayer()
@@ -60,6 +67,25 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('itemAdded', this.onItemAdded, this)
     this.events.on('resume', this.applySettingsFromStorage, this)
+  }
+
+  private onSceneShutdown() {
+    this.saveManager.stopAutoSave()
+
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.events.off('resume', this.applySettingsFromStorage, this)
+
+    const keyboard = this.input.keyboard
+    if (keyboard) {
+      if (this.keyDownHandler) keyboard.off('keydown', this.keyDownHandler)
+      if (this.keyUpHandler) keyboard.off('keyup', this.keyUpHandler)
+    }
+
+    if (this.escKey && this.escHandler) {
+      this.escKey.off('down', this.escHandler)
+    }
   }
 
   private applySettingsFromStorage() {
@@ -471,30 +497,33 @@ export class GameScene extends Phaser.Scene {
     const keyboard = this.input.keyboard
     if (!keyboard) return
 
-    keyboard.on('keydown', (ev: KeyboardEvent) => {
+    this.keyDownHandler = (ev: KeyboardEvent) => {
       const code = ev.code
       if (code === this.moveBindings.left) this.moveInput.left = true
       if (code === this.moveBindings.right) this.moveInput.right = true
       if (code === this.moveBindings.up) this.moveInput.up = true
       if (code === this.moveBindings.down) this.moveInput.down = true
-    })
+    }
+    keyboard.on('keydown', this.keyDownHandler)
 
-    keyboard.on('keyup', (ev: KeyboardEvent) => {
+    this.keyUpHandler = (ev: KeyboardEvent) => {
       const code = ev.code
       if (code === this.moveBindings.left) this.moveInput.left = false
       if (code === this.moveBindings.right) this.moveInput.right = false
       if (code === this.moveBindings.up) this.moveInput.up = false
       if (code === this.moveBindings.down) this.moveInput.down = false
-    })
+    }
+    keyboard.on('keyup', this.keyUpHandler)
 
-    const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
-    escKey.on('down', () => {
+    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escHandler = () => {
       if (this.scene.isPaused('GameScene')) return
       this.scene.pause('GameScene')
       this.scene.pause('UIScene')
       this.scene.launch('PauseScene')
       this.scene.bringToTop('PauseScene')
-    })
+    }
+    this.escKey.on('down', this.escHandler)
   }
 
   private setupCamera() {
@@ -583,8 +612,4 @@ export class GameScene extends Phaser.Scene {
     this.game.events.emit('startDialogue', npc.getDialogue())
   }
 
-  shutdown() {
-    this.game.events.off('locationChanged', this.onLocationChanged, this)
-    this.events.off('resume', this.applySettingsFromStorage, this)
-  }
 }

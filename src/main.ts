@@ -15,6 +15,7 @@ import { LocationManager } from './managers/LocationManager'
 import { SaveManager } from './managers/Save'
 import { SkillInsightsManager } from './managers/SkillInsights'
 import { AssessmentManager } from './managers/Assessment'
+import { ToastManager } from './managers/Toast'
 
 declare global {
   interface Window {
@@ -53,6 +54,7 @@ const inventory = InventoryManager.getInstance(game)
 const questManager = QuestManager.getInstance(game)
 const locationManager = LocationManager.getInstance(game)
 const assessmentManager = AssessmentManager.getInstance(game)
+const toastManager = ToastManager.getInstance(game)
 SaveManager.getInstance(game)
 SkillInsightsManager.getInstance(game)
 if (typeof game.registry !== 'undefined') {
@@ -61,4 +63,5 @@ if (typeof game.registry !== 'undefined') {
   game.registry.set('questManager', questManager)
   game.registry.set('locationManager', locationManager)
   game.registry.set('assessmentManager', assessmentManager)
+  game.registry.set('toastManager', toastManager)
 }

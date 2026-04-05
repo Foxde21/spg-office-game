@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { Dialogue, DialogueChoice, ItemData, AIContext } from '../types'
+import type { Dialogue, DialogueChoice, ItemData, AIContext, QuestData } from '../types'
 import type { AssessmentQuestion, CompetencyDomain, AssessmentState, SubmitAnswerResult } from '../types/assessment'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
@@ -8,6 +8,8 @@ import { SaveManager } from '../managers/Save'
 import { SkillInsightsManager } from '../managers/SkillInsights'
 import { AIDialogueManager } from '../managers/AIDialogue'
 import { LocationManager } from '../managers/LocationManager'
+import { ToastManager } from '../managers/Toast'
+import type { ToastPayload } from '../managers/Toast'
 import { CAREER_LEVELS, COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config'
 import { getAllCareerPaths, getCareerPath } from '../data/careerPaths'
 import { getSkillMatrixForNpc } from '../data/skillMatrices'
@@ -41,6 +43,7 @@ export class UIScene extends Phaser.Scene {
   private questManager!: QuestManager
   private saveManager!: SaveManager
   private aiManager!: AIDialogueManager
+  private toastManager!: ToastManager
 
   private activeAssessment:
     | {
@@ -52,6 +55,9 @@ export class UIScene extends Phaser.Scene {
         scores: number[]
       }
     | null = null
+
+  private knownAssessmentDomainIds: Set<string> = new Set()
+  private assessmentDomainsInitialized = false
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -72,6 +78,9 @@ export class UIScene extends Phaser.Scene {
   private readonly HUD_Y = GAME_HEIGHT - 95
   private readonly HUD_H = 95
   private readonly SECTION_W = 420
+
+  private toastQueues: Map<string, ToastPayload[]> = new Map()
+  private activeToasts: Map<string, Phaser.GameObjects.Text> = new Map()
 
   private isAIMode = false
   private aiConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
@@ -801,6 +810,10 @@ export class UIScene extends Phaser.Scene {
     this.saveManager = SaveManager.getInstance(this.game)
     this.locationManager = LocationManager.getInstance(this.game)
     this.aiManager = AIDialogueManager.getInstance()
+    this.toastManager = ToastManager.getInstance(this.game)
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onSceneShutdown, this)
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.onSceneShutdown, this)
 
     this.createHUDBackground()
     this.createStatusBar()
@@ -810,6 +823,29 @@ export class UIScene extends Phaser.Scene {
     this.createInventoryBox()
     this.setupEventListeners()
     this.setupInput()
+  }
+
+  private onSceneShutdown() {
+    this.game.events.off('startDialogue', this.startDialogue, this)
+    this.game.events.off('stressChanged', this.onStressChanged, this)
+    this.game.events.off('respectChanged', this.onRespectChanged, this)
+    this.game.events.off('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.off('gameOver', this.onGameOver, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.game.events.off('questStarted', this.onQuestStarted, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('uiToast', this.onToast, this)
+    this.game.events.off('domainProgressChanged', this.onDomainProgressChanged, this)
+
+    this.inventoryKey?.off('down', this.toggleInventory, this)
+    this.saveKey?.off('down', this.saveGame, this)
+
+    this.activeToasts.forEach((t) => t.destroy())
+    this.activeToasts.clear()
+    this.toastQueues.clear()
+    this.knownAssessmentDomainIds.clear()
+    this.assessmentDomainsInitialized = false
   }
 
   private setupInput() {
@@ -823,24 +859,126 @@ export class UIScene extends Phaser.Scene {
   private saveGame() {
     const success = this.saveManager.save()
     if (success) {
-      this.showSaveMessage('Игра сохранена')
+      this.toastManager.show({ text: 'Игра сохранена', variant: 'success', durationMs: 4000 })
     } else {
-      this.showSaveMessage('Ошибка сохранения')
+      this.toastManager.show({ text: 'Ошибка сохранения', variant: 'danger' })
     }
   }
 
-  private showSaveMessage(text: string, durationMs = 2000) {
-    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, text, {
+  private onToast(payload: ToastPayload) {
+    const variant = payload.variant ?? 'info'
+    const queue = this.toastQueues.get(variant) ?? []
+    queue.push(payload)
+    this.toastQueues.set(variant, queue)
+    this.showNextToastForVariant(variant)
+  }
+
+  private onDomainProgressChanged() {
+    this.refreshAssessmentModules(true)
+  }
+
+  private refreshAssessmentModules(showToasts: boolean) {
+    const assessment = this.getAssessmentManager()
+    if (!assessment) return
+
+    const domains = assessment.getAvailableDomains()
+    if (domains.length === 0) return
+
+    if (!this.assessmentDomainsInitialized) {
+      domains.forEach((d) => this.knownAssessmentDomainIds.add(d.id))
+      this.assessmentDomainsInitialized = true
+
+      return
+    }
+
+    const newDomains = domains.filter((d) => !this.knownAssessmentDomainIds.has(d.id))
+    if (showToasts && newDomains.length > 0) {
+      newDomains.forEach((d) => {
+        this.toastManager.show({
+          text: `Открыт новый модуль: ${d.name}`,
+          variant: 'success',
+          durationMs: 4000
+        })
+      })
+    }
+
+    domains.forEach((d) => this.knownAssessmentDomainIds.add(d.id))
+  }
+
+  private showNextToastForVariant(variant: string) {
+    if (this.activeToasts.has(variant)) return
+
+    const queue = this.toastQueues.get(variant)
+    const next = queue?.shift()
+    if (!next) return
+
+    const durationMs = next.durationMs ?? 2000
+
+    let textColor = '#dfe6e9'
+    let bgColor = '#0a0a18cc'
+    if (variant === 'success') {
+      textColor = '#00b894'
+    }
+    if (variant === 'warning') {
+      textColor = '#fdcb6e'
+    }
+    if (variant === 'danger') {
+      textColor = '#ff7675'
+    }
+
+    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, next.text, {
       fontSize: '15px',
-      color: '#00b894',
-      backgroundColor: '#0a0a18cc',
-      padding: { x: 12, y: 6 },
+      color: textColor,
+      backgroundColor: bgColor,
+      padding: { x: 12, y: 6 }
     })
     msg.setDepth(300)
     msg.setOrigin(0.5)
-    
+    msg.setAlpha(0)
+
+    this.activeToasts.set(variant, msg)
+    this.layoutActiveToasts()
+
+    this.tweens.add({
+      targets: msg,
+      alpha: 1,
+      duration: 140,
+      ease: 'Sine.easeOut'
+    })
+
     this.time.delayedCall(durationMs, () => {
-      msg.destroy()
+      this.tweens.add({
+        targets: msg,
+        alpha: 0,
+        duration: 140,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          msg.destroy()
+          this.activeToasts.delete(variant)
+          this.layoutActiveToasts()
+          this.showNextToastForVariant(variant)
+        }
+      })
+    })
+  }
+
+  private layoutActiveToasts() {
+    const order = ['danger', 'warning', 'success', 'info']
+    const variants = Array.from(this.activeToasts.keys()).sort((a, b) => {
+      const ia = order.indexOf(a)
+      const ib = order.indexOf(b)
+      const ra = ia >= 0 ? ia : order.length
+      const rb = ib >= 0 ? ib : order.length
+
+      return ra - rb
+    })
+
+    const baseY = this.HUD_Y - 30
+    const gap = 34
+    variants.forEach((v, idx) => {
+      const msg = this.activeToasts.get(v)
+      if (!msg) return
+      msg.setPosition(GAME_WIDTH / 2, baseY - idx * gap)
     })
   }
 
@@ -1266,6 +1404,18 @@ export class UIScene extends Phaser.Scene {
   }
 
   private setupEventListeners() {
+    this.game.events.off('startDialogue', this.startDialogue, this)
+    this.game.events.off('stressChanged', this.onStressChanged, this)
+    this.game.events.off('respectChanged', this.onRespectChanged, this)
+    this.game.events.off('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.off('gameOver', this.onGameOver, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.game.events.off('questStarted', this.onQuestStarted, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('uiToast', this.onToast, this)
+    this.game.events.off('domainProgressChanged', this.onDomainProgressChanged, this)
+
     this.game.events.on('startDialogue', this.startDialogue, this)
     this.game.events.on('stressChanged', this.onStressChanged, this)
     this.game.events.on('respectChanged', this.onRespectChanged, this)
@@ -1275,18 +1425,40 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('questStarted', this.onQuestStarted, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('locationChanged', this.onLocationChanged, this)
+    this.game.events.on('uiToast', this.onToast, this)
+    this.game.events.on('domainProgressChanged', this.onDomainProgressChanged, this)
+
+    this.refreshAssessmentModules(false)
   }
 
-  private onQuestStarted() {
+  private onQuestStarted(quest?: QuestData) {
     this.updateQuestPanel()
+    if (quest?.title) {
+      this.toastManager.show({
+        text: `Квест начат: ${quest.title}`,
+        variant: 'info',
+        durationMs: 4000
+      })
+    }
   }
 
-  private onQuestCompleted() {
+  private onQuestCompleted(quest?: QuestData) {
     this.updateQuestPanel()
+    if (quest?.title) {
+      this.toastManager.show({
+        text: `Квест выполнен: ${quest.title}`,
+        variant: 'success',
+        durationMs: 4000
+      })
+    }
   }
 
-  private onLocationChanged() {
+  private onLocationChanged(payload?: { locationData?: { name?: string } }) {
     this.drawMinimap()
+    const name = payload?.locationData?.name
+    if (name) {
+      this.toastManager.show({ text: `${name}`, variant: 'info', durationMs: 1800 })
+    }
   }
 
   private onItemAdded() {
@@ -1316,9 +1488,24 @@ export class UIScene extends Phaser.Scene {
     this.updateBars()
   }
 
-  private onCareerLevelUp(data: { level: string }) {
+  private onCareerLevelUp(payload: unknown) {
+    const data = payload as { level?: string; newLevel?: string }
+    const levelId = data.newLevel ?? data.level
+    if (!levelId) return
+
+    this.gameState.setCareerLevel(levelId)
+
+
+    if (levelId !== 'lead') {
+      this.toastManager.show({
+        text: `Повышение! Теперь ты - ${this.getCareerTitle()?.title || levelId}`,
+        variant: 'success',
+        durationMs: 4000
+      })
+    }
+
     this.updateBars()
-    if (data.level === 'lead') {
+    if (levelId === 'lead') {
       this.scene.stop('GameScene')
       this.scene.stop('UIScene')
       this.scene.start('VictoryScene')
@@ -1917,6 +2104,9 @@ export class UIScene extends Phaser.Scene {
             this.gameState.setCareerPath(pathId)
             careerChanged = true
 
+            this.knownAssessmentDomainIds.clear()
+            this.assessmentDomainsInitialized = false
+
             this.gameState.setFlag(`careerPath:${pathId}`, true)
 
             const path = getAllCareerPaths().find((p) => p.id === pathId)
@@ -1927,6 +2117,8 @@ export class UIScene extends Phaser.Scene {
               if (assessment && typeof (assessment as { setCareerPath?: unknown }).setCareerPath === 'function') {
                 ;(assessment as { setCareerPath: (id: string) => void }).setCareerPath(pathId)
               }
+
+              this.refreshAssessmentModules(false)
 
               if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
                 const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
@@ -1950,7 +2142,7 @@ export class UIScene extends Phaser.Scene {
       if (careerChanged) {
         this.updateBars()
         if (careerToastText) {
-          this.showSaveMessage(careerToastText, 4000)
+          this.toastManager.show({ text: careerToastText, variant: 'success', durationMs: 4000 })
         }
       }
     }
