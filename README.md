@@ -82,18 +82,9 @@ npm run test:all      # Все тесты
 
 ## Текущий статус
 
-**MVP Progress:**
-- [x] Базовая структура проекта
-- [x] Управление персонажем
-- [x] Система диалогов
-- [x] Система квестов
-- [x] Инвентарь
-- [x] Стресс и уважение
-- [x] Тестирование (Vitest + Playwright)
-- [ ] Несколько локаций
-- [ ] Сохранение прогресса
-- [ ] Главное меню
-- [ ] Анимации персонажей
+См. [`backlog/roadmap.md`](./backlog/roadmap.md) — milestones M0…P7 (с делением на game-feature waves и educational delivery phases). Vertical slice (Wave 0+1) shipped; в работе Wave 2 (AI-track polish) и legacy in-progress (NPCs, animations).
+
+Подробнее о текущих стори: `backlog/{todo,in-progress,done}/`.
 
 ## Технологии
 
