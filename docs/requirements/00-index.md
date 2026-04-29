@@ -52,7 +52,7 @@ Track here. Each row is a P-rated open question that must be resolved before a s
 | Q5  | Difficulty selectable per save or global; how it composes with assessment adaptive difficulty | P2 | 01, 09, 10    | TBD   | Open   |
 | Q6  | Localisation scope for v1 — RU only, or RU + EN?                                             | P2 | 09             | TBD   | Open   |
 | Q7  | Achievement persistence: per save, per device, or both                                       | P3 | 08, 14         | TBD   | Open   |
-| Q8  | AI dialogue fallback when proxy is unreachable                                                | P1 | 04             | TBD   | Open   |
+| ~~Q8~~  | ~~AI dialogue fallback when proxy is unreachable~~ — **Resolved by [ADR-0001](../architecture/ADR-0001-ai-proxy-fallback.md)** | P1 | 04             | Fox   | Closed |
 | Q9  | Stress overflow over 100 — clamp or treat as game-over trigger only at exactly 100?          | P2 | 02             | TBD   | Open   |
 | Q10 | Skill Tree (UI surface) vs Skill Insights (data manager) — overlap, naming, ADR needed       | P1 | 09, 10         | TBD   | Open   |
 | Q11 | Career path choice — terminal, or can a player switch mid-game (and what happens to progress)? | P1 | 11, 08      | TBD   | Open   |
@@ -64,5 +64,6 @@ P0 = blocks gameplay; P1 = blocks the story that depends on it; P2 = answer befo
 
 ## Change log
 
+- 2026-04-29 — Q8 resolved by ADR-0001 (AI proxy fallback policy). Story `OQ-033`.
 - 2026-04-29 — v2 decomposition. Added modules 10-15 (assessments, career paths, mini-games, multiplayer, achievements, AI-employee). Updated 01, 06, 07, 08, 09 for v2 vision. Refreshed gaps table.
 - 2026-04-29 — initial decomposition from `docs/game-design.md` v1.
