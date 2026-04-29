@@ -4,7 +4,7 @@ title: ADR-0001 — AI proxy fallback policy (resolves Q8)
 epic: ai
 type: docs
 estimate: 2
-status: todo
+status: in-progress
 created: 2026-04-29
 owner: unassigned
 depends_on: []
@@ -109,3 +109,4 @@ Gate: [backlog/dod.md](../dod.md). Tick in the PR, not here.
 ## Changelog
 
 - 2026-04-29 — created via `/new-story`. DOR green; awaiting user confirmation on the proposed fallback policy (see Design notes) before `/start-story`.
+- 2026-04-29 — design confirmed by Fox; started on branch `docs/OQ-033-adr-ai-proxy-fallback` (off dev).
