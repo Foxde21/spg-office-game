@@ -53,27 +53,38 @@ The Claude slash commands automate these steps. If you are not using Claude Code
 3. Fill frontmatter: `id`, `title`, `status: todo`, `created: YYYY-MM-DD`.
 4. Replace heading with `# OQ-XXX — <title>`.
 5. Add changelog line: `- YYYY-MM-DD — created.`
-6. Do not commit yet — let scope/ACs land first.
+6. **Do not commit, and do not `git add`.** Leave the file **untracked**. The next step (`start-story`) stages it on the feature branch — we never commit directly to `dev`.
 
 ### `start-story` — equivalent
 
+The goal is **one atomic commit** containing the move + status flip + changelog line. Don't split.
+
 1. Confirm DOR ticked in the story file.
-2. Confirm working tree clean.
+2. Confirm working tree clean **except for the OQ-XXX file itself** (it's expected to be untracked). If anything else is dirty: stash or commit first.
 3. `git checkout dev && git pull`
 4. `git checkout -b feature/OQ-XXX-<slug>` (or `bugfix/`, `refactor/`, `docs/` per story type).
-5. `git mv backlog/todo/OQ-XXX-*.md backlog/in-progress/`.
-6. Update frontmatter: `status: in-progress`. Append changelog: `- YYYY-MM-DD — started on branch <name> (off dev).`
-7. `git commit -m "chore(OQ-XXX): start story"`.
+5. **Atomic block — do all four before committing:**
+   - `mv backlog/todo/OQ-XXX-*.md backlog/in-progress/` (plain `mv`, not `git mv` — file is untracked).
+   - Update frontmatter: `status: todo` → `status: in-progress`.
+   - Append changelog: `- YYYY-MM-DD — started on branch <name> (off dev).`
+   - **Sanity check:** read the file and verify the new `status:` line and the new changelog line are both there.
+6. `git add backlog/in-progress/OQ-XXX-*.md && git commit -m "chore(OQ-XXX): start story"`.
 
 ### `finish-story` — equivalent
 
-1. Walk DOD. Run `npm run test`, `npm run test:e2e` (if relevant), `npm run build`.
+The goal is **one atomic commit** containing the move + status flip + AC ticks + changelog line. Don't split.
+
+1. Walk DOD. Run `npm run test`, `npm run test:e2e` (if relevant), `npm run build`. For doc-only stories these are n/a.
 2. Self-review the diff (`git diff dev...HEAD`).
-3. `git mv backlog/in-progress/OQ-XXX-*.md backlog/done/`.
-4. Update frontmatter: `status: done`. Append changelog: `- YYYY-MM-DD — completed; PR #<n>.`
-5. `git commit -m "chore(OQ-XXX): complete story"`.
-6. `git push -u origin <branch>`.
-7. `gh pr create --base dev` using `.github/pull_request_template.md`. PR target is **dev**, not main.
+3. **Atomic block — do all five before committing:**
+   - `git mv backlog/in-progress/OQ-XXX-*.md backlog/done/` (file IS tracked here — was committed at start).
+   - Update frontmatter: `status: in-progress` → `status: done`.
+   - Tick every AC checkbox (`- [ ]` → `- [x]`) for ACs actually met.
+   - Append changelog: `- YYYY-MM-DD — completed; PR #<n if known>.`
+   - **Sanity check:** read the file and verify `status: done`, all met ACs are `[x]`, and the new changelog line is there.
+4. `git add backlog/done/OQ-XXX-*.md && git commit -m "chore(OQ-XXX): complete story"`.
+5. `git push -u origin <branch>`.
+6. `gh pr create --base dev` using `.github/pull_request_template.md`. PR target is **dev**, not main.
 
 ## Legacy stories (001-032)
 
