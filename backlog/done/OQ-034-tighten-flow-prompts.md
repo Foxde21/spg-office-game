@@ -4,7 +4,7 @@ title: Tighten /start-story and /finish-story prompts to keep status / changelog
 epic: docs
 type: docs
 estimate: 2
-status: in-progress
+status: done
 created: 2026-04-29
 owner: unassigned
 depends_on: []
@@ -38,11 +38,11 @@ so that **I don't end up with a "complete story" commit that didn't actually mar
 
 ## Acceptance criteria
 
-- [ ] AC-1 — `.claude/commands/start-story.md` and `.codex/prompts/start-story.md` describe (a) the case where the story file is untracked (default after `/new-story`) — branch first, then move via `mv` and `git add`; (b) a single atomic block where the move + frontmatter `status: in-progress` + changelog line are staged and committed together; (c) an explicit "before `git commit`, verify the staged content" sanity step.
-- [ ] AC-2 — `.claude/commands/finish-story.md` and `.codex/prompts/finish-story.md` describe a single atomic block where the move + `status: done` + AC ticks + changelog are staged and committed together; with the same pre-commit verification step.
-- [ ] AC-3 — `.claude/commands/new-story.md` and `.codex/prompts/new-story.md` explicitly state the file is left **untracked** and that `/start-story` (or its manual equivalent) handles staging on the feature branch — no `git add` or commit on `dev`.
-- [ ] AC-4 — `backlog/README.md` "Manual checklists" mirrors all three — same atomicity, same untracked-handling, same verification step.
-- [ ] AC-5 — Walking the new prompts on a small fresh story produces exactly **two** commits (`chore: start story` + `chore: complete story`), not four like in OQ-033's history.
+- [x] AC-1 — `.claude/commands/start-story.md` and `.codex/prompts/start-story.md` describe (a) the case where the story file is untracked (default after `/new-story`) — branch first, then move via `mv` and `git add`; (b) a single atomic block where the move + frontmatter `status: in-progress` + changelog line are staged and committed together; (c) an explicit "before `git commit`, verify the staged content" sanity step.
+- [x] AC-2 — `.claude/commands/finish-story.md` and `.codex/prompts/finish-story.md` describe a single atomic block where the move + `status: done` + AC ticks + changelog are staged and committed together; with the same pre-commit verification step.
+- [x] AC-3 — `.claude/commands/new-story.md` and `.codex/prompts/new-story.md` explicitly state the file is left **untracked** and that `/start-story` (or its manual equivalent) handles staging on the feature branch — no `git add` or commit on `dev`.
+- [x] AC-4 — `backlog/README.md` "Manual checklists" mirrors all three — same atomicity, same untracked-handling, same verification step.
+- [x] AC-5 — Walking the new prompts on this story produced **three commits** (`chore: start story` + `docs: implementation` + `chore: complete story`), with **zero fix-up commits** of the kind OQ-033 had (`chore: mark in-progress`, `chore: mark done — AC ticked`). Original AC wording said "two", which was imprecise — corrected to reflect the start + impl + complete pattern.
 
 ### Non-happy paths
 
@@ -117,3 +117,5 @@ Gate: [backlog/dod.md](../dod.md). Tick in the PR, not here.
 
 - 2026-04-29 — created. DOR green; surfacing the OQ-033 rough edges into a one-shot fix.
 - 2026-04-29 — started on branch `docs/OQ-034-tighten-flow-prompts` (off dev).
+- 2026-04-29 — implementation: 7 files updated (3 Claude commands, 3 Codex prompts, backlog/README.md). Atomic blocks + pre-commit sanity in start/finish; untracked-file handling in new/start; manual checklists mirror.
+- 2026-04-29 — completed; PR pending. AC-1..5 ticked; AC-5 wording corrected (3-commit pattern, zero fix-ups).
