@@ -29,7 +29,9 @@ tests/
 └── unit/
     ├── GameState.test.ts   # Тесты состояния игры
     ├── Inventory.test.ts   # Тесты инвентаря
-    └── Quest.test.ts       # Тесты квестов
+    ├── Quest.test.ts       # Тесты квестов
+    ├── CareerPaths.test.ts # Реестр карьерных путей и структура AI_CAREER_PATH
+    └── ...                 # Остальные unit-тесты
 ```
 
 ### Запуск
@@ -115,13 +117,20 @@ class MockGame {
 - Прогресс квеста
 - Награды за квест
 
+**Career Paths (данные и реестр):**
+- `getCareerPath(id)` / `getAllCareerPaths()` — возврат путей и структура
+- `AI_CAREER_PATH` — 4 уровня, 8 доменов, 12 вопросов ML Fundamentals, форма вопросов и вариантов ответа
+
 ## E2E тесты (Playwright)
 
 ### Структура
 
 ```
 e2e/
-└── game.spec.ts    # Тесты геймплея
+├── helpers.ts          # Общие хелперы для e2e (goToGame, startNpcDialogue, ...)
+├── game.spec.ts        # Базовые тесты геймплея
+├── careerPaths.spec.ts # Флоу выбора карьерного пути (Петя -> AI -> реакция Тимлида)
+└── assessment.spec.ts  # Флоу ассессмента (AI): вопросы, промоушен, ретейк, полный путь
 ```
 
 ### Запуск
@@ -188,9 +197,22 @@ test('should move player with arrow keys', async ({ page }) => {
 
 ### Советы по E2E тестам
 
+#### Типизация и доступ к game в браузере
+
+В E2E тестах код выполняется в контексте браузера (`page.evaluate`, `page.waitForFunction`).
+
+Соблюдайте правила типизации:
+- Не используйте `as any`
+- Используйте `unknown` + проверки на `null`/`undefined`
+- Для доступа к `window.game` используйте структурные типы, экспортируемые из `e2e/helpers.ts`:
+  - `WindowWithGame`
+  - `PhaserGameLike`
+
 1. **Ожидание загрузки:** Всегда ждите загрузку игры
    ```typescript
-   await page.waitForTimeout(2000)
+   import { waitForGameReady } from '../e2e/helpers'
+
+   await waitForGameReady(page)
    ```
 
 2. **Движение к NPC:** Используйте циклы для точного позиционирования
@@ -210,6 +232,18 @@ test('should move player with arrow keys', async ({ page }) => {
    ```typescript
    await expect(page.getByText('Инвентарь')).toBeVisible()
    ```
+
+#### AI Assessment E2E
+
+В `e2e/assessment.spec.ts` есть сценарии, которые проверяют:
+- запуск ассессмента через Петю
+- детерминированный выбор лучшего ответа (максимальный `score`)
+- повышение только в конце модуля и только на один уровень
+- `resetDomainProgress` для ретейка домена
+- полный путь: `ai-junior -> ai-middle -> ai-senior -> ai-architect`
+
+Для стабильности long-run сценариев ассессмент запускается с фиксированным числом вопросов
+(3), чтобы тест не зависел от адаптивного количества вопросов.
 
 ## Покрытие кода
 
@@ -360,7 +394,7 @@ const mockGame = {
 ### 5. Асинхронность в E2E
 
 ```typescript
-await page.waitForTimeout(500)  // Ждём анимации
+await page.waitForFunction(() => document.querySelector('.dialog').textContent.includes('Начать квест'))
 await expect(element).toBeVisible()  // Ждём появления
 ```
 

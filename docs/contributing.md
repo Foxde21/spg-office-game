@@ -10,7 +10,7 @@
 ### Установка
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/Foxde21/spg-office-game.git
 cd spg-office-game
 npm install
 ```
@@ -30,25 +30,15 @@ npm run preview
 
 ## Workflow разработки
 
-### 1. Выбор задачи
+Канонический флоу описан в трёх местах — читай все три прежде чем брать первую стори:
 
-1. Открыть `backlog/todo/`
-2. Выбрать задачу
-3. Переместить в `backlog/in-progress/`
+- **[`backlog/README.md`](../backlog/README.md)** — story lifecycle (todo → in-progress → done), 3-tier бранчинг, manual checklists для пользователей без slash-команд.
+- **[`AGENTS.md`](../AGENTS.md)** — orientation, conventions, роли (`ba-analyst`, `game-dev`, `code-reviewer`), full workflow + branching + commit conventions.
+- **[`docs/guides/onboarding.md`](./guides/onboarding.md)** — junior-friendly walkthrough "твои первые 30 минут на проекте": от свежего клона до первого PR.
 
-### 2. Разработка
+Кратко: новые стори используют `OQ-XXX` ID, ветки cut-off от `dev` (`feature/OQ-XXX-slug`), PR target — `dev`. Релизы — отдельный PR `dev → main`. **Не коммитим напрямую в `main` или `dev`.** DOR / DOD — гейты, не пропускаем.
 
-1. Создать ветку: `git checkout -b feature/001-quest-system`
-2. Написать код
-3. Протестировать вручную
-4. Проверить DOD
-
-### 3. Завершение
-
-1. Проверить все пункты DOD в тикете
-2. Переместить тикет в `backlog/done/`
-3. Закоммитить изменения
-4. Создать PR (если работаете в команде)
+Slash-команды (Claude Code): `/new-story`, `/start-story`, `/finish-story`, `/adr`. Codex-эквиваленты — `.codex/prompts/` (см. [`docs/guides/codex-starter-prompt.md`](./guides/codex-starter-prompt.md)) или manual checklist в `backlog/README.md`.
 
 ## Стайлгайд
 

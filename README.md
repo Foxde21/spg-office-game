@@ -40,43 +40,51 @@ npm run test:all      # Все тесты
 - Зарабатывать уважение команды
 - Не попасть под сокращение
 
+После того как игрок набрал достаточно уважения (respect), NPC могут предложить **выбор карьерного пути** (например, AI-путь через Петю Сеньора). Выбранный путь влияет на:
+- Отображаемый грейд в HUD
+- Логику повышения (через AssessmentManager)
+- Реакции NPC в диалогах
+
 Цель — стать Team Lead!
 
 ## Документация
 
-Полная документация в папке `docs/`:
+Полная документация в папке `docs/` (карта — [docs/README.md](./docs/README.md)):
 
-- **[Архитектура](./docs/architecture.md)** — структура проекта, принципы
-- **[Геймдизайн](./docs/game-design.md)** — механики, персонажи, сюжет
+- **[Требования](./docs/requirements/00-index.md)** — декомпозиция игрового дизайна по модулям, personas, открытые вопросы (источник правды по поведению)
+- **[Архитектура](./docs/architecture.md)** + **[ADR](./docs/architecture/README.md)** — архитектурные решения
 - **[API](./docs/api.md)** — менеджеры, события, типы данных
+- **[Геймдизайн](./docs/game-design.md)** — нарратив (механики, персонажи, сюжет — формальная спецификация в `docs/requirements/`)
 - **[Ассеты](./docs/assets.md)** — требования к графике и звуку
 - **[Разработка](./docs/contributing.md)** — workflow, стайлгайд
 - **[Тестирование](./docs/testing.md)** — Vitest + Playwright
+- **[Skill Matrices](./docs/spg-skill-matrix/)** — экспорт матриц навыков для Skill Insights
+
+## Career paths (кратко)
+
+- **Условия предложения**
+  - При `respect >= 20` и пока не выбран путь (`careerPathChosen = false`) scripted NPC могут стартовать с диалогов `career-choice-*`.
+- **Выбор AI пути**
+  - Реализован через NPC `petya-senior`.
+  - Выбор сохраняется в `PlayerData.careerPath` и флаг `careerPathChosen`.
+- **Реакции NPC**
+  - После выбора пути scripted NPC могут иметь диалог `career-react-<pathId>` (например, `career-react-ai`).
 
 ## Бэклог
 
-Управление задачами в папке `backlog/`:
+Управление задачами в папке `backlog/` (одна стори — один markdown):
 
-- **[todo/](./backlog/todo/)** — задачи к выполнению
-- **[in-progress/](./backlog/in-progress/)** — в работе
-- **[done/](./backlog/done/)** — выполненные
+- **[todo/](./backlog/todo/)** — готовые к взятию (DOR ✅)
+- **[in-progress/](./backlog/in-progress/)** — в работе (одна ветка от `dev`)
+- **[done/](./backlog/done/)** — смерджено
 
-[Читать о workflow](./backlog/README.md)
+- [Workflow](./backlog/README.md) · [DOR](./backlog/dor.md) · [DOD](./backlog/dod.md) · [Roadmap (waves)](./backlog/roadmap.md) · [Шаблон стори](./backlog/_template.md)
 
 ## Текущий статус
 
-**MVP Progress:**
-- [x] Базовая структура проекта
-- [x] Управление персонажем
-- [x] Система диалогов
-- [x] Система квестов
-- [x] Инвентарь
-- [x] Стресс и уважение
-- [x] Тестирование (Vitest + Playwright)
-- [ ] Несколько локаций
-- [ ] Сохранение прогресса
-- [ ] Главное меню
-- [ ] Анимации персонажей
+См. [`backlog/roadmap.md`](./backlog/roadmap.md) — milestones M0…P7 (с делением на game-feature waves и educational delivery phases). Vertical slice (Wave 0+1) shipped; в работе Wave 2 (AI-track polish) и legacy in-progress (NPCs, animations).
+
+Подробнее о текущих стори: `backlog/{todo,in-progress,done}/`.
 
 ## Технологии
 

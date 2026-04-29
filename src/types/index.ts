@@ -1,3 +1,5 @@
+import type { AssessmentState } from './assessment'
+
 export interface DialogueLine {
   speaker: string
   text: string
@@ -8,6 +10,10 @@ export interface DialogueChoice {
   text: string
   nextDialogue?: string
   action?: string
+  startAssessment?: {
+    domainId: string
+    questionCount?: number
+  }
   stressChange?: number
   respectChange?: number
   giveItem?: string
@@ -20,6 +26,8 @@ export interface DialogueChoice {
     hasStress?: number
     hasQuest?: string
     questCompleted?: string
+    flagSet?: string
+    flagNotSet?: string
   }
 }
 
@@ -77,6 +85,7 @@ export interface QuestData {
 export interface PlayerData {
   name: string
   careerLevel: string
+  careerPath?: string
   stress: number
   respect: number
   inventory: string[]
@@ -96,6 +105,7 @@ export interface GameState {
   player: PlayerData
   npcs: Record<string, NPCState>
   flags: Record<string, boolean>
+  assessment?: AssessmentState
 }
 
 export interface SaveData {
@@ -107,7 +117,9 @@ export interface SaveData {
   completedQuests: string[]
   npcs: Record<string, NPCState>
   flags: Record<string, boolean>
+  assessment?: AssessmentState
 }
 
 export * from './ai'
+export * from './assessment'
 export * from './Location'

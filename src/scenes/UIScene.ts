@@ -1,26 +1,63 @@
 import Phaser from 'phaser'
-import type { Dialogue, DialogueChoice, ItemData, AIContext } from '../types'
+import type { Dialogue, DialogueChoice, ItemData, AIContext, QuestData } from '../types'
+import type { AssessmentQuestion, CompetencyDomain, AssessmentState, SubmitAnswerResult } from '../types/assessment'
 import { GameStateManager } from '../managers/GameState'
 import { InventoryManager } from '../managers/Inventory'
 import { QuestManager } from '../managers/Quest'
 import { SaveManager } from '../managers/Save'
+import { SkillInsightsManager } from '../managers/SkillInsights'
 import { AIDialogueManager } from '../managers/AIDialogue'
 import { LocationManager } from '../managers/LocationManager'
+import { ToastManager } from '../managers/Toast'
+import type { ToastPayload } from '../managers/Toast'
 import { CAREER_LEVELS, COLORS, GAME_HEIGHT, GAME_WIDTH } from '../config'
+import { getAllCareerPaths, getCareerPath } from '../data/careerPaths'
+import { getSkillMatrixForNpc } from '../data/skillMatrices'
+import type { SkillMatrixLevelId } from '../data/skillMatrices/softwareDev'
 
 export class UIScene extends Phaser.Scene {
   private dialogueBox!: Phaser.GameObjects.Container
+  private dialogueBackground!: Phaser.GameObjects.Graphics
+  private dialogueTopLine!: Phaser.GameObjects.Graphics
   private dialogueText!: Phaser.GameObjects.Text
   private speakerText!: Phaser.GameObjects.Text
   private choicesContainer!: Phaser.GameObjects.Container
+  private dialogueBoxWidth = 820
+  private dialogueBoxHeight = 240
+  private readonly DIALOGUE_MIN_HEIGHT = 240
+  private readonly DIALOGUE_MAX_HEIGHT = 470
+  private readonly DIALOGUE_TEXT_TOP = 52
+  private readonly DIALOGUE_CHOICES_TOP = 180
+  private dialogueChoicesTop = 180
+  private readonly DIALOGUE_BOTTOM_PADDING = 44
+  private choicesViewportHeight = 0
+  private choicesContentHeight = 0
+  private choicesStartIndex = 0
   private currentDialogue: Dialogue | null = null
+  private availableDialogues: Dialogue[] = []
   private currentLineIndex = 0
   private aiDialogueData: { npcId: string; name: string } | null = null
+  private scriptedNpc: { npcId: string; name: string; role: string } | null = null
   private gameState!: GameStateManager
   private inventory!: InventoryManager
   private questManager!: QuestManager
   private saveManager!: SaveManager
   private aiManager!: AIDialogueManager
+  private toastManager!: ToastManager
+
+  private activeAssessment:
+    | {
+        domainId: string
+        domainName: string
+        domainScoreBefore: number
+        questions: AssessmentQuestion[]
+        currentIndex: number
+        scores: number[]
+      }
+    | null = null
+
+  private knownAssessmentDomainIds: Set<string> = new Set()
+  private assessmentDomainsInitialized = false
 
   private stressBar!: Phaser.GameObjects.Graphics
   private respectBar!: Phaser.GameObjects.Graphics
@@ -42,6 +79,9 @@ export class UIScene extends Phaser.Scene {
   private readonly HUD_H = 95
   private readonly SECTION_W = 420
 
+  private toastQueues: Map<string, ToastPayload[]> = new Map()
+  private activeToasts: Map<string, Phaser.GameObjects.Text> = new Map()
+
   private isAIMode = false
   private aiConversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
   private inputField!: Phaser.GameObjects.DOMElement
@@ -55,8 +95,712 @@ export class UIScene extends Phaser.Scene {
   private selectedChoiceIndex = 0
   private currentChoices: DialogueChoice[] = []
 
+  private queuedDialoguePack: { dialogues: Dialogue[]; startId?: string } | null = null
+  private queuedDialogueState:
+    | { dialogue: Dialogue; lineIndex: number; availableDialogues: Dialogue[] }
+    | null = null
+
+  private getAssessmentManager(): {
+    startAssessmentSession: (
+      domainId: string,
+      count?: number,
+      assessorNpcId?: string
+    ) => { domainId: string; questions: AssessmentQuestion[] }
+    submitAnswer: (questionId: string, choiceId: string) => SubmitAnswerResult
+    getAvailableDomains: () => CompetencyDomain[]
+    getDomainProgress: (domainId: string) => { score: number }
+    getAssessmentState: () => AssessmentState
+    getCurrentLevel: () => { id: string; title?: string } | null
+    getAverageScore: () => number
+    resetDomainProgress: (domainId: string) => boolean
+    promote: () => boolean
+  } | null {
+    const regGet = this.game.registry?.get
+    if (typeof regGet !== 'function') return null
+
+    const assessment = this.game.registry.get('assessmentManager') as unknown
+    if (!assessment) return null
+
+    const api = assessment as {
+      startAssessmentSession?: unknown
+      submitAnswer?: unknown
+      getAvailableDomains?: unknown
+      getDomainProgress?: unknown
+      getAssessmentState?: unknown
+      getCurrentLevel?: unknown
+      getAverageScore?: unknown
+      resetDomainProgress?: unknown
+      promote?: unknown
+    }
+
+    if (
+      typeof api.startAssessmentSession !== 'function' ||
+      typeof api.submitAnswer !== 'function' ||
+      typeof api.getAvailableDomains !== 'function' ||
+      typeof api.getDomainProgress !== 'function' ||
+      typeof api.getAssessmentState !== 'function' ||
+      typeof api.getCurrentLevel !== 'function' ||
+      typeof api.getAverageScore !== 'function' ||
+      typeof api.resetDomainProgress !== 'function' ||
+      typeof api.promote !== 'function'
+    ) {
+      return null
+    }
+
+    return assessment as {
+      startAssessmentSession: (
+        domainId: string,
+        count?: number,
+        assessorNpcId?: string
+      ) => { domainId: string; questions: AssessmentQuestion[] }
+      submitAnswer: (questionId: string, choiceId: string) => SubmitAnswerResult
+      getAvailableDomains: () => CompetencyDomain[]
+      getDomainProgress: (domainId: string) => { score: number }
+      getAssessmentState: () => AssessmentState
+      getCurrentLevel: () => { id: string; title?: string } | null
+      getAverageScore: () => number
+      resetDomainProgress: (domainId: string) => boolean
+      promote: () => boolean
+    }
+  }
+
+  private getAdaptiveAssessmentQuestionCount(): number {
+    const assessment = this.getAssessmentManager()
+    if (!assessment) return 3
+
+    const levelId = assessment.getCurrentLevel()?.id
+    const avg = assessment.getAverageScore()
+
+    let count = 3
+    if (levelId?.includes('middle')) count = 4
+    if (levelId?.includes('senior')) count = 5
+    if (levelId?.includes('architect')) count = 6
+
+    if (avg >= 70) count = Math.max(count, 6)
+    else if (avg >= 50) count = Math.max(count, 5)
+    else if (avg >= 30) count = Math.max(count, 4)
+
+    return Math.max(3, Math.min(6, count))
+  }
+
+  private queueResumeAfterCurrentLine(): void {
+    if (!this.currentDialogue) return
+
+    this.queuedDialogueState = {
+      dialogue: this.currentDialogue,
+      lineIndex: this.currentLineIndex + 1,
+      availableDialogues: this.availableDialogues,
+    }
+  }
+
+  private showAssessmentDomainSelect(shouldQueue: boolean): void {
+    const assessment = this.getAssessmentManager()
+    if (!assessment || !this.scriptedNpc) {
+      this.endDialogue()
+
+      return
+    }
+
+    if (this.gameState.getCareerPath() !== 'ai') {
+      this.endDialogue()
+
+      return
+    }
+
+    if (shouldQueue) {
+      this.queueResumeAfterCurrentLine()
+    }
+
+    const questionCount = this.getAdaptiveAssessmentQuestionCount()
+
+    const domains = assessment.getAvailableDomains()
+    const choices: DialogueChoice[] = domains.map((d) => ({
+      text: d.name,
+      startAssessment: {
+        domainId: d.id,
+        questionCount,
+      }
+    }))
+
+    choices.push({
+      text: 'Не сегодня',
+      action: 'resumeDialogue'
+    })
+
+    const dialogue: Dialogue = {
+      id: 'assessment-domain-select',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: 'По какой теме хочешь сегодня?',
+          choices,
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private mapCareerLevelToSkillLevel(levelId: string | undefined): SkillMatrixLevelId {
+    if (!levelId) return 'junior'
+    if (levelId.includes('junior')) return 'junior'
+    if (levelId.includes('middle')) return 'middle'
+    if (levelId.includes('senior')) return 'senior'
+    if (levelId.includes('architect')) return 'expert'
+
+    return 'junior'
+  }
+
+  private showSkillTips(): void {
+    if (!this.scriptedNpc || !this.currentDialogue) return
+
+    const npcId = this.scriptedNpc.npcId
+    const matrix = getSkillMatrixForNpc(npcId)
+    if (!matrix) return
+
+    const insights = SkillInsightsManager.getInstance(this.game)
+    const weakest = insights.getWeakestTagsForNpc(npcId, 3)
+    if (weakest.length === 0) return
+
+    let currentLevelId: string | undefined
+    if (typeof this.game.registry?.get === 'function') {
+      const assessment = this.game.registry.get('assessmentManager') as unknown
+      if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+        const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
+        currentLevelId = level?.id
+      }
+    }
+
+    const skillLevel = this.mapCareerLevelToSkillLevel(currentLevelId)
+    const nextLevel: SkillMatrixLevelId | undefined =
+      skillLevel === 'junior'
+        ? 'middle'
+        : skillLevel === 'middle'
+          ? 'senior'
+          : skillLevel === 'senior'
+            ? 'expert'
+            : undefined
+
+    const lines = weakest
+      .map((w) => {
+        const item = matrix.items[w.tag]
+        const current = item?.expectations?.[skillLevel]
+        const next = nextLevel ? item?.expectations?.[nextLevel] : undefined
+        const score = Math.round(w.score)
+
+        if (current && next) {
+          return `• ${w.title} (${score}/100)\nСейчас: ${current}\nСледующий уровень: ${next}`
+        }
+
+        if (current) {
+          return `• ${w.title} (${score}/100)\nСейчас: ${current}`
+        }
+
+        return `• ${w.title} (${score}/100)`
+      })
+      .join('\n\n')
+
+    this.queuedDialogueState = {
+      dialogue: this.currentDialogue,
+      lineIndex: this.currentLineIndex,
+      availableDialogues: this.availableDialogues,
+    }
+
+    const dialogue: Dialogue = {
+      id: 'skill-tips',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: `Смотри, что стоит подтянуть:\n\n${lines}`,
+          choices: [
+            {
+              text: 'Назад',
+              action: 'resumeDialogue'
+            }
+          ]
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private showAssessmentQuestion(): void {
+    if (!this.activeAssessment || !this.scriptedNpc) return
+
+    const question = this.activeAssessment.questions[this.activeAssessment.currentIndex]
+    if (!question) {
+      this.showAssessmentSummary()
+
+      return
+    }
+
+    const choices: DialogueChoice[] = question.choices.map((c) => ({
+      text: c.text,
+      action: `assessmentAnswer:${question.id}:${c.id}`
+    }))
+
+    const dialogue: Dialogue = {
+      id: `assessment-question-${question.id}`,
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: `${question.scenario}\n\n${question.question}`,
+          choices,
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private startAssessment(domainId: string, questionCount?: number): void {
+    const assessment = this.getAssessmentManager()
+    if (!assessment || !this.scriptedNpc) return
+
+    if (this.gameState.getCareerPath() !== 'ai') {
+      this.endDialogue()
+
+      return
+    }
+
+    if (this.gameState.getStress() > 80) {
+      const dialogue: Dialogue = {
+        id: 'assessment-too-tired',
+        lines: [
+          {
+            speaker: this.scriptedNpc.name,
+            text: 'Ты выглядишь уставшим. Может, сходи за кофе и вернёмся позже?',
+            choices: [
+              {
+                text: 'Окей',
+                action: 'resumeDialogue'
+              }
+            ]
+          }
+        ]
+      }
+
+      this.availableDialogues = [dialogue]
+      this.currentDialogue = dialogue
+      this.currentLineIndex = 0
+      this.showCurrentLine()
+
+      return
+    }
+
+    const progressBefore = assessment.getDomainProgress(domainId)
+    const domainScoreBefore = progressBefore?.score ?? 0
+
+    let session: { questions: AssessmentQuestion[] }
+    try {
+      session = assessment.startAssessmentSession(domainId, questionCount, this.scriptedNpc.npcId)
+    } catch {
+      this.endDialogue()
+
+      return
+    }
+
+    const domains = assessment.getAvailableDomains()
+    const domainName = domains.find((d) => d.id === domainId)?.name || domainId
+
+    this.activeAssessment = {
+      domainId,
+      domainName,
+      domainScoreBefore,
+      questions: session.questions,
+      currentIndex: 0,
+      scores: [],
+    }
+
+    if (session.questions.length === 0) {
+      this.activeAssessment = null
+
+      const dialogue: Dialogue = {
+        id: 'assessment-domain-empty',
+        lines: [
+          {
+            speaker: this.scriptedNpc.name,
+            text: 'Ты уже ответил на все вопросы по этой теме. Молодец! Попробуй другой домен.',
+            choices: [
+              {
+                text: 'Выбрать другой домен',
+                action: 'openAssessmentDomainSelectResume'
+              },
+              {
+                text: 'Пройти ещё раз',
+                action: `assessmentRestartDomain:${domainId}`
+              },
+              {
+                text: 'Ок',
+                action: 'resumeDialogue'
+              }
+            ]
+          }
+        ]
+      }
+
+      this.availableDialogues = [dialogue]
+      this.currentDialogue = dialogue
+      this.currentLineIndex = 0
+      this.showCurrentLine()
+
+      return
+    }
+
+    this.showAssessmentQuestion()
+  }
+
+  private handleAssessmentAnswer(questionId: string, choiceId: string): void {
+    const assessment = this.getAssessmentManager()
+    if (!assessment || !this.scriptedNpc || !this.activeAssessment) return
+
+    const result = assessment.submitAnswer(questionId, choiceId)
+    this.activeAssessment.scores.push(result.score)
+    this.activeAssessment.currentIndex += 1
+
+    this.gameState.setAssessmentState(assessment.getAssessmentState())
+
+    const stress = this.gameState.getStress()
+    if (stress > 80) {
+      this.activeAssessment = null
+
+      const dialogue: Dialogue = {
+        id: 'assessment-too-tired',
+        lines: [
+          {
+            speaker: this.scriptedNpc.name,
+            text: 'Ты выглядишь уставшим. Может, сходи за кофе и вернёмся позже?',
+            choices: [
+              {
+                text: 'Окей',
+                action: 'resumeDialogue'
+              }
+            ]
+          }
+        ]
+      }
+
+      this.availableDialogues = [dialogue]
+      this.currentDialogue = dialogue
+      this.currentLineIndex = 0
+      this.showCurrentLine()
+
+      return
+    }
+
+    let text = result.feedback
+    if (result.score < 70 && result.explanation) {
+      text = `${text}\n\nПодсказка: ${result.explanation}`
+    }
+
+    const hasMore = this.activeAssessment.currentIndex < this.activeAssessment.questions.length
+    const nextAction = hasMore ? 'assessmentNext' : 'assessmentFinish'
+    const nextText = hasMore ? 'Следующий вопрос' : 'Итог'
+
+    const dialogue: Dialogue = {
+      id: `assessment-feedback-${questionId}`,
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text,
+          choices: [
+            {
+              text: nextText,
+              action: nextAction
+            }
+          ]
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private showAssessmentSummary(): void {
+    if (!this.activeAssessment || !this.scriptedNpc) {
+      this.endDialogue()
+
+      return
+    }
+
+    const assessment = this.getAssessmentManager()
+    if (!assessment) {
+      this.endDialogue()
+
+      return
+    }
+
+    const scores = this.activeAssessment.scores
+    const avg = scores.length > 0 ? scores.reduce((acc, s) => acc + s, 0) / scores.length : 0
+    const after = assessment.getDomainProgress(this.activeAssessment.domainId)?.score ?? 0
+    const before = this.activeAssessment.domainScoreBefore
+    const domainName = this.activeAssessment.domainName
+
+    const npcId = this.scriptedNpc.npcId
+    const skillMatrix = getSkillMatrixForNpc(npcId)
+    const insights = SkillInsightsManager.getInstance(this.game)
+    const weakest = skillMatrix ? insights.getWeakestTagsForNpc(npcId, 3) : []
+
+    this.activeAssessment = null
+
+    const levelUp = assessment.promote()
+    if (levelUp) {
+      this.gameState.setAssessmentState(assessment.getAssessmentState())
+    }
+
+    const afterLevelTitle = assessment.getCurrentLevel()?.title
+    const levelUpLine =
+      levelUp && afterLevelTitle
+        ? `\n\nПоздравляю, ты вырос в грейде: ${afterLevelTitle}!`
+        : levelUp
+          ? '\n\nПоздравляю, ты вырос в грейде!'
+          : ''
+
+    const choices: DialogueChoice[] = []
+    if (weakest.length > 0) {
+      choices.push({
+        text: 'Советы',
+        action: 'showSkillTips'
+      })
+    }
+
+    choices.push({
+      text: 'Ок',
+      action: 'resumeDialogue'
+    })
+
+    const dialogue: Dialogue = {
+      id: 'assessment-summary',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: `На сегодня хватит. Твой результат по ассессменту «${domainName}»: ${Math.round(avg)}/100. Общий результат по теме: Было ${Math.round(before)}, стало ${Math.round(after)}.${levelUpLine}`,
+          choices
+        }
+      ]
+    }
+
+    this.availableDialogues = [dialogue]
+    this.currentDialogue = dialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private getCareerReactionLine(
+    npcId: string,
+    npcName: string,
+    npcRole: string,
+    careerPathName: string
+  ): string {
+    if (npcId === 'petya-senior') {
+      return `О, ты всё-таки выбрал ${careerPathName}. Норм. Тогда готовься учиться по-взрослому.`
+    }
+
+    if (npcId === 'tim-lead') {
+      return `Круто, что ты выбрал ${careerPathName}. Если захочешь — помогу разложить, что качать и как расти без выгорания.`
+    }
+
+    const roleLower = npcRole.toLowerCase()
+    if (roleLower.includes('тимлид') || roleLower.includes('team lead')) {
+      return `Принято: ${careerPathName}. Я буду смотреть на результат и стабильность — без геройства.`
+    }
+
+    if (roleLower.includes('hr') || roleLower.includes('рекрутер')) {
+      return `Класс, что ты определился: ${careerPathName}. Это помогает планировать развитие и ожидания.`
+    }
+
+    return `${npcName}: ${careerPathName} — принято. Посмотрим, как ты раскроешься.`
+  }
+
+  private injectShowCareerPathsChoice(choices: DialogueChoice[]): DialogueChoice[] {
+    if (this.currentDialogue?.id.startsWith('career-paths-')) {
+      return choices
+    }
+
+    if (choices.some((c) => c.action === 'describeCareerPaths')) {
+      return choices
+    }
+
+    if (!this.currentDialogue) {
+      return choices
+    }
+
+    if (this.currentDialogue.id.startsWith('career-choice-')) {
+      return [
+        {
+          text: 'Посмотреть другие пути',
+          action: 'describeCareerPaths'
+        },
+        ...choices
+      ]
+    }
+
+    const careerPathChosen = Boolean(this.gameState.getFlag('careerPathChosen'))
+    const respect = this.gameState.getRespect()
+    if (careerPathChosen || respect < 20) {
+      return choices
+    }
+
+    if (!this.scriptedNpc) {
+      return choices
+    }
+
+    const hasCareerDialogue = this.availableDialogues.some((d) => d.id.startsWith('career-choice-'))
+    if (hasCareerDialogue) {
+      return choices
+    }
+
+    return [
+      {
+        text: 'Посмотреть другие пути',
+        action: 'describeCareerPaths'
+      },
+      ...choices
+    ]
+  }
+
+  private showCareerPathsInfo() {
+    if (!this.currentDialogue || !this.scriptedNpc) return
+
+    const all = getAllCareerPaths()
+    const unlocked = all.filter((p) => this.isCareerPathUnlocked(p))
+    const listText = unlocked
+      .map((p) => `${p.name}: ${p.description}`)
+      .join('\n')
+
+    this.queuedDialogueState = {
+      dialogue: this.currentDialogue,
+      lineIndex: this.currentLineIndex,
+      availableDialogues: this.availableDialogues,
+    }
+
+    const npcCareerChoices: DialogueChoice[] = []
+    if (this.scriptedNpc.npcId === 'petya-senior') {
+      npcCareerChoices.push({
+        text: 'Выбрать AI-путь',
+        action: 'resumeDialogueTo:career-choice-ai-confirm;setFlag:careerPathChosen;setCareerPath:ai'
+      })
+
+      npcCareerChoices.push({
+        text: 'Пока не определился...',
+        action: 'resumeDialogueTo:career-choice-later'
+      })
+
+    } else {
+      npcCareerChoices.push({
+        text: 'Пока не определился...',
+        action: 'resumeDialogueTo:career-choice-undecided'
+      })
+    }
+
+    const infoDialogue: Dialogue = {
+      id: 'career-paths-info',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: unlocked.length > 0 ? `Смотри, что сейчас доступно:\n${listText}` : 'Пока нет доступных путей.',
+          choices: unlocked.length > 0 ? npcCareerChoices : undefined
+        }
+      ]
+    }
+
+    this.availableDialogues = [infoDialogue]
+    this.currentDialogue = infoDialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
+  private showCareerPathsSelect() {
+    if (!this.scriptedNpc) return
+
+    const selectDialogue: Dialogue = {
+      id: 'career-paths-select',
+      lines: [
+        {
+          speaker: this.scriptedNpc.name,
+          text: 'Выбирай путь:',
+          choices: [
+            {
+              text: '...',
+              action: 'showCareerPathsSelectResume'
+            }
+          ]
+        }
+      ]
+    }
+
+    this.availableDialogues = [selectDialogue]
+    this.currentDialogue = selectDialogue
+    this.currentLineIndex = 0
+    this.showCurrentLine()
+  }
+
   constructor() {
     super({ key: 'UIScene' })
+  }
+
+  private expandCareerPathsChoices(choices: DialogueChoice[]): DialogueChoice[] {
+    const idx = choices.findIndex(
+      (c) => c.action === 'showCareerPathsSelect' || c.action === 'showCareerPathsSelectResume'
+    )
+    if (idx < 0) return choices
+
+    const placeholder = choices[idx]
+    const withResume = placeholder?.action === 'showCareerPathsSelectResume'
+
+    const careerPaths = getAllCareerPaths()
+    const unlocked = careerPaths.filter((p) => this.isCareerPathUnlocked(p))
+    const pathChoices: DialogueChoice[] = unlocked.map((p) => ({
+      text: p.name,
+      action: withResume
+        ? `resumeDialogue;setFlag:careerPathChosen;setCareerPath:${p.id}`
+        : `setFlag:careerPathChosen;setCareerPath:${p.id}`,
+    }))
+
+    const before = choices.slice(0, idx)
+    const after = choices.slice(idx + 1)
+
+    return [...before, ...pathChoices, ...after]
+  }
+
+  private isCareerPathUnlocked(path: {
+    unlockCondition?: { minRespect?: number; requiredFlag?: string; requiredQuest?: string }
+  }): boolean {
+    const unlock = path.unlockCondition
+    if (!unlock) return true
+
+    if (unlock.minRespect !== undefined) {
+      if (this.gameState.getRespect() < unlock.minRespect) {
+        return false
+      }
+    }
+
+    if (unlock.requiredFlag) {
+      if (!this.gameState.getFlag(unlock.requiredFlag)) {
+        return false
+      }
+    }
+
+    if (unlock.requiredQuest) {
+      if (!this.questManager.isQuestCompleted(unlock.requiredQuest)) {
+        return false
+      }
+    }
+
+    return true
   }
 
   create() {
@@ -66,6 +810,10 @@ export class UIScene extends Phaser.Scene {
     this.saveManager = SaveManager.getInstance(this.game)
     this.locationManager = LocationManager.getInstance(this.game)
     this.aiManager = AIDialogueManager.getInstance()
+    this.toastManager = ToastManager.getInstance(this.game)
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.onSceneShutdown, this)
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.onSceneShutdown, this)
 
     this.createHUDBackground()
     this.createStatusBar()
@@ -75,6 +823,29 @@ export class UIScene extends Phaser.Scene {
     this.createInventoryBox()
     this.setupEventListeners()
     this.setupInput()
+  }
+
+  private onSceneShutdown() {
+    this.game.events.off('startDialogue', this.startDialogue, this)
+    this.game.events.off('stressChanged', this.onStressChanged, this)
+    this.game.events.off('respectChanged', this.onRespectChanged, this)
+    this.game.events.off('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.off('gameOver', this.onGameOver, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.game.events.off('questStarted', this.onQuestStarted, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('uiToast', this.onToast, this)
+    this.game.events.off('domainProgressChanged', this.onDomainProgressChanged, this)
+
+    this.inventoryKey?.off('down', this.toggleInventory, this)
+    this.saveKey?.off('down', this.saveGame, this)
+
+    this.activeToasts.forEach((t) => t.destroy())
+    this.activeToasts.clear()
+    this.toastQueues.clear()
+    this.knownAssessmentDomainIds.clear()
+    this.assessmentDomainsInitialized = false
   }
 
   private setupInput() {
@@ -88,24 +859,126 @@ export class UIScene extends Phaser.Scene {
   private saveGame() {
     const success = this.saveManager.save()
     if (success) {
-      this.showSaveMessage('Игра сохранена')
+      this.toastManager.show({ text: 'Игра сохранена', variant: 'success', durationMs: 4000 })
     } else {
-      this.showSaveMessage('Ошибка сохранения')
+      this.toastManager.show({ text: 'Ошибка сохранения', variant: 'danger' })
     }
   }
 
-  private showSaveMessage(text: string) {
-    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, text, {
+  private onToast(payload: ToastPayload) {
+    const variant = payload.variant ?? 'info'
+    const queue = this.toastQueues.get(variant) ?? []
+    queue.push(payload)
+    this.toastQueues.set(variant, queue)
+    this.showNextToastForVariant(variant)
+  }
+
+  private onDomainProgressChanged() {
+    this.refreshAssessmentModules(true)
+  }
+
+  private refreshAssessmentModules(showToasts: boolean) {
+    const assessment = this.getAssessmentManager()
+    if (!assessment) return
+
+    const domains = assessment.getAvailableDomains()
+    if (domains.length === 0) return
+
+    if (!this.assessmentDomainsInitialized) {
+      domains.forEach((d) => this.knownAssessmentDomainIds.add(d.id))
+      this.assessmentDomainsInitialized = true
+
+      return
+    }
+
+    const newDomains = domains.filter((d) => !this.knownAssessmentDomainIds.has(d.id))
+    if (showToasts && newDomains.length > 0) {
+      newDomains.forEach((d) => {
+        this.toastManager.show({
+          text: `Открыт новый модуль: ${d.name}`,
+          variant: 'success',
+          durationMs: 4000
+        })
+      })
+    }
+
+    domains.forEach((d) => this.knownAssessmentDomainIds.add(d.id))
+  }
+
+  private showNextToastForVariant(variant: string) {
+    if (this.activeToasts.has(variant)) return
+
+    const queue = this.toastQueues.get(variant)
+    const next = queue?.shift()
+    if (!next) return
+
+    const durationMs = next.durationMs ?? 2000
+
+    let textColor = '#dfe6e9'
+    let bgColor = '#0a0a18cc'
+    if (variant === 'success') {
+      textColor = '#00b894'
+    }
+    if (variant === 'warning') {
+      textColor = '#fdcb6e'
+    }
+    if (variant === 'danger') {
+      textColor = '#ff7675'
+    }
+
+    const msg = this.add.text(GAME_WIDTH / 2, this.HUD_Y - 30, next.text, {
       fontSize: '15px',
-      color: '#00b894',
-      backgroundColor: '#0a0a18cc',
-      padding: { x: 12, y: 6 },
+      color: textColor,
+      backgroundColor: bgColor,
+      padding: { x: 12, y: 6 }
     })
     msg.setDepth(300)
     msg.setOrigin(0.5)
-    
-    this.time.delayedCall(2000, () => {
-      msg.destroy()
+    msg.setAlpha(0)
+
+    this.activeToasts.set(variant, msg)
+    this.layoutActiveToasts()
+
+    this.tweens.add({
+      targets: msg,
+      alpha: 1,
+      duration: 140,
+      ease: 'Sine.easeOut'
+    })
+
+    this.time.delayedCall(durationMs, () => {
+      this.tweens.add({
+        targets: msg,
+        alpha: 0,
+        duration: 140,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          msg.destroy()
+          this.activeToasts.delete(variant)
+          this.layoutActiveToasts()
+          this.showNextToastForVariant(variant)
+        }
+      })
+    })
+  }
+
+  private layoutActiveToasts() {
+    const order = ['danger', 'warning', 'success', 'info']
+    const variants = Array.from(this.activeToasts.keys()).sort((a, b) => {
+      const ia = order.indexOf(a)
+      const ib = order.indexOf(b)
+      const ra = ia >= 0 ? ia : order.length
+      const rb = ib >= 0 ? ib : order.length
+
+      return ra - rb
+    })
+
+    const baseY = this.HUD_Y - 30
+    const gap = 34
+    variants.forEach((v, idx) => {
+      const msg = this.activeToasts.get(v)
+      if (!msg) return
+      msg.setPosition(GAME_WIDTH / 2, baseY - idx * gap)
     })
   }
 
@@ -129,8 +1002,7 @@ export class UIScene extends Phaser.Scene {
     const x = 10
     const y = this.HUD_Y + 6
 
-    const careerLevel = this.gameState.getCareerLevel()
-    const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
+    const { title } = this.getCareerTitle()
 
     const badge = this.add.graphics()
     badge.fillStyle(COLORS.primary, 0.3)
@@ -139,7 +1011,7 @@ export class UIScene extends Phaser.Scene {
     badge.strokeRoundedRect(x, y, this.SECTION_W - 5, 22, 4)
     badge.setDepth(51)
 
-    this.statusText = this.add.text(x + 10, y + 4, `⭐  ${levelData?.title || 'Junior Developer'}`, {
+    this.statusText = this.add.text(x + 10, y + 4, `⭐  ${title}`, {
       fontSize: '13px',
       color: '#a29bfe',
       fontStyle: 'bold',
@@ -155,7 +1027,7 @@ export class UIScene extends Phaser.Scene {
 
     this.stressBar = this.add.graphics()
     this.stressBar.setDepth(52)
-    this.drawBar(this.stressBar, x + 68, y + 30, this.SECTION_W - 80, 14, 0, COLORS.danger)
+    this.drawBar(this.stressBar, x + 68, y + 30, this.SECTION_W - 80, 14, 0, COLORS.warning)
 
     this.stressWarning = this.add.text(x + this.SECTION_W - 8, y + 30, '', {
       fontSize: '14px',
@@ -306,8 +1178,7 @@ export class UIScene extends Phaser.Scene {
     const y = this.HUD_Y + 6
     const barW = this.SECTION_W - 80
 
-    const stressColor = stress > 70 ? COLORS.danger : stress > 40 ? COLORS.warning : COLORS.success
-    this.drawBar(this.stressBar, x + 68, y + 30, barW, 14, stress, stressColor)
+    this.drawBar(this.stressBar, x + 68, y + 30, barW, 14, stress, COLORS.warning)
     this.drawBar(this.respectBar, x + 68, y + 52, barW, 14, respect, COLORS.success)
 
     if (stress > 70) {
@@ -318,9 +1189,26 @@ export class UIScene extends Phaser.Scene {
       this.stressWarning.setText('')
     }
 
+    const { title } = this.getCareerTitle()
+    this.statusText.setText(`⭐  ${title}`)
+  }
+
+  private getCareerTitle(): { title: string } {
+    const pathId = this.gameState.getCareerPath()
+    if (pathId && typeof this.game.registry?.get === 'function') {
+      const assessment = this.game.registry.get('assessmentManager') as unknown
+      if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+        const level = (assessment as { getCurrentLevel: () => { title: string } | null }).getCurrentLevel()
+        if (level?.title) {
+          return { title: level.title }
+        }
+      }
+    }
+
     const careerLevel = this.gameState.getCareerLevel()
     const levelData = CAREER_LEVELS.find((l) => l.id === careerLevel)
-    this.statusText.setText(`⭐  ${levelData?.title || 'Junior Developer'}`)
+
+    return { title: levelData?.title || 'Junior Developer' }
   }
 
   private createQuestPanel() {
@@ -516,6 +1404,18 @@ export class UIScene extends Phaser.Scene {
   }
 
   private setupEventListeners() {
+    this.game.events.off('startDialogue', this.startDialogue, this)
+    this.game.events.off('stressChanged', this.onStressChanged, this)
+    this.game.events.off('respectChanged', this.onRespectChanged, this)
+    this.game.events.off('careerLevelUp', this.onCareerLevelUp, this)
+    this.game.events.off('gameOver', this.onGameOver, this)
+    this.game.events.off('itemAdded', this.onItemAdded, this)
+    this.game.events.off('questStarted', this.onQuestStarted, this)
+    this.game.events.off('questCompleted', this.onQuestCompleted, this)
+    this.game.events.off('locationChanged', this.onLocationChanged, this)
+    this.game.events.off('uiToast', this.onToast, this)
+    this.game.events.off('domainProgressChanged', this.onDomainProgressChanged, this)
+
     this.game.events.on('startDialogue', this.startDialogue, this)
     this.game.events.on('stressChanged', this.onStressChanged, this)
     this.game.events.on('respectChanged', this.onRespectChanged, this)
@@ -525,18 +1425,40 @@ export class UIScene extends Phaser.Scene {
     this.game.events.on('questStarted', this.onQuestStarted, this)
     this.game.events.on('questCompleted', this.onQuestCompleted, this)
     this.game.events.on('locationChanged', this.onLocationChanged, this)
+    this.game.events.on('uiToast', this.onToast, this)
+    this.game.events.on('domainProgressChanged', this.onDomainProgressChanged, this)
+
+    this.refreshAssessmentModules(false)
   }
 
-  private onQuestStarted() {
+  private onQuestStarted(quest?: QuestData) {
     this.updateQuestPanel()
+    if (quest?.title) {
+      this.toastManager.show({
+        text: `Квест начат: ${quest.title}`,
+        variant: 'info',
+        durationMs: 4000
+      })
+    }
   }
 
-  private onQuestCompleted() {
+  private onQuestCompleted(quest?: QuestData) {
     this.updateQuestPanel()
+    if (quest?.title) {
+      this.toastManager.show({
+        text: `Квест выполнен: ${quest.title}`,
+        variant: 'success',
+        durationMs: 4000
+      })
+    }
   }
 
-  private onLocationChanged() {
+  private onLocationChanged(payload?: { locationData?: { name?: string } }) {
     this.drawMinimap()
+    const name = payload?.locationData?.name
+    if (name) {
+      this.toastManager.show({ text: `${name}`, variant: 'info', durationMs: 1800 })
+    }
   }
 
   private onItemAdded() {
@@ -566,58 +1488,53 @@ export class UIScene extends Phaser.Scene {
     this.updateBars()
   }
 
-  private onCareerLevelUp() {
+  private onCareerLevelUp(payload: unknown) {
+    const data = payload as { level?: string; newLevel?: string }
+    const levelId = data.newLevel ?? data.level
+    if (!levelId) return
+
+    this.gameState.setCareerLevel(levelId)
+
+
+    if (levelId !== 'lead') {
+      this.toastManager.show({
+        text: `Повышение! Теперь ты - ${this.getCareerTitle()?.title || levelId}`,
+        variant: 'success',
+        durationMs: 4000
+      })
+    }
+
     this.updateBars()
+    if (levelId === 'lead') {
+      this.scene.stop('GameScene')
+      this.scene.stop('UIScene')
+      this.scene.start('VictoryScene')
+    }
   }
 
   private onGameOver(data: { reason: string }) {
-    this.scene.pause('GameScene')
-    
-    const overlay = this.add.graphics()
-    overlay.fillStyle(0x000000, 0.8)
-    overlay.fillRect(0, 0, 1280, 720)
-
-    const reasonText = data.reason === 'burnout' 
-      ? 'Вы выгорели и уволились...' 
-      : 'Game Over'
-
-    this.add.text(640, 340, reasonText, {
-      fontSize: '32px',
-      color: '#e17055',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-
-    this.add.text(640, 400, 'Нажмите R для перезапуска', {
-      fontSize: '18px',
-      color: '#ffffff',
-    }).setOrigin(0.5)
-
-    this.input.keyboard!.once('keydown-R', () => {
-      this.gameState.reset()
-      this.inventory.clear()
-      this.questManager.clear()
-      this.scene.restart()
-      this.scene.start('GameScene')
-    })
+    this.scene.stop('GameScene')
+    this.scene.stop('UIScene')
+    this.scene.start('GameOverScene', { reason: data.reason })
   }
 
   private createDialogueBox() {
-    const boxWidth = 820
-    const boxHeight = 240
+    const boxWidth = this.dialogueBoxWidth
+    const boxHeight = this.dialogueBoxHeight
     const x = GAME_WIDTH / 2
     const y = this.HUD_Y - boxHeight / 2 - 10
 
     this.dialogueBox = this.add.container(x, y)
 
-    const background = this.add.graphics()
-    background.fillStyle(0x1a1a2e, 0.97)
-    background.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
-    background.lineStyle(2, 0x6c5ce7)
-    background.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+    this.dialogueBackground = this.add.graphics()
+    this.dialogueBackground.fillStyle(0x1a1a2e, 0.97)
+    this.dialogueBackground.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+    this.dialogueBackground.lineStyle(2, 0x6c5ce7)
+    this.dialogueBackground.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
 
-    const topLine = this.add.graphics()
-    topLine.lineStyle(1, 0x4a4a6a, 0.5)
-    topLine.lineBetween(-boxWidth / 2 + 12, -boxHeight / 2 + 40, boxWidth / 2 - 12, -boxHeight / 2 + 40)
+    this.dialogueTopLine = this.add.graphics()
+    this.dialogueTopLine.lineStyle(1, 0x6c5ce7, 0.6)
+    this.dialogueTopLine.lineBetween(-boxWidth / 2 + 15, -boxHeight / 2 + 40, boxWidth / 2 - 15, -boxHeight / 2 + 40)
 
     this.speakerText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 12, '', {
       fontSize: '16px',
@@ -625,13 +1542,16 @@ export class UIScene extends Phaser.Scene {
       color: '#a29bfe',
     })
 
-    this.dialogueText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + 52, '', {
+    this.dialogueText = this.add.text(-boxWidth / 2 + 20, -boxHeight / 2 + this.DIALOGUE_TEXT_TOP, '', {
       fontSize: '15px',
       color: '#e0e0f0',
       wordWrap: { width: boxWidth - 48 },
     })
 
-    this.choicesContainer = this.add.container(-boxWidth / 2 + 20, -boxHeight / 2 + 140)
+    this.dialogueText.setLineSpacing(6)
+
+    this.dialogueChoicesTop = this.DIALOGUE_CHOICES_TOP
+    this.choicesContainer = this.add.container(-boxWidth / 2 + 20, -boxHeight / 2 + this.dialogueChoicesTop)
 
     const inputHtml = `
       <input type="text" id="ai-input" placeholder="Введите сообщение..." 
@@ -642,12 +1562,20 @@ export class UIScene extends Phaser.Scene {
     this.inputField.setVisible(false)
 
     this.dialogueHint = this.add.text(boxWidth / 2 - 16, boxHeight / 2 - 10, '[ПРОБЕЛ] Далее  [ESC] Закрыть', {
-      fontSize: '11px',
-      color: '#444466',
+      fontSize: '12px',
+      color: '#8888bb',
     })
     this.dialogueHint.setOrigin(1, 1)
 
-    this.dialogueBox.add([background, topLine, this.speakerText, this.dialogueText, this.choicesContainer, this.inputField, this.dialogueHint])
+    this.dialogueBox.add([
+      this.dialogueBackground,
+      this.dialogueTopLine,
+      this.speakerText,
+      this.dialogueText,
+      this.choicesContainer,
+      this.inputField,
+      this.dialogueHint
+    ])
     this.dialogueBox.setVisible(false)
     this.dialogueBox.setDepth(200)
 
@@ -658,12 +1586,51 @@ export class UIScene extends Phaser.Scene {
     this.dialogueEnterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER)
   }
 
-  private startDialogue(data: Dialogue | { npcId: string; name: string; isAI: true }) {
+  private resizeDialogueBox(targetHeight: number) {
+    const boxWidth = this.dialogueBoxWidth
+    const minH = this.DIALOGUE_MIN_HEIGHT
+    const maxH = this.DIALOGUE_MAX_HEIGHT
+    const boxHeight = Math.max(minH, Math.min(maxH, targetHeight))
+    this.dialogueBoxHeight = boxHeight
+
+    const y = this.HUD_Y - boxHeight / 2 - 10
+    this.dialogueBox.setPosition(GAME_WIDTH / 2, y)
+
+    this.dialogueBackground.clear()
+    this.dialogueBackground.fillStyle(0x1a1a2e, 0.97)
+    this.dialogueBackground.fillRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+    this.dialogueBackground.lineStyle(2, 0x6c5ce7)
+    this.dialogueBackground.strokeRoundedRect(-boxWidth / 2, -boxHeight / 2, boxWidth, boxHeight, 12)
+
+    this.dialogueTopLine.clear()
+    this.dialogueTopLine.lineStyle(1, 0x6c5ce7, 0.6)
+    this.dialogueTopLine.lineBetween(-boxWidth / 2 + 15, -boxHeight / 2 + 40, boxWidth / 2 - 15, -boxHeight / 2 + 40)
+
+    this.speakerText.setPosition(-boxWidth / 2 + 20, -boxHeight / 2 + 12)
+    this.dialogueText.setPosition(-boxWidth / 2 + 20, -boxHeight / 2 + this.DIALOGUE_TEXT_TOP)
+    this.choicesContainer.setPosition(-boxWidth / 2 + 20, -boxHeight / 2 + this.dialogueChoicesTop)
+
+    const viewportHeight = Math.max(1, boxHeight - this.dialogueChoicesTop - this.DIALOGUE_BOTTOM_PADDING)
+    this.choicesViewportHeight = viewportHeight
+
+    this.dialogueHint.setPosition(boxWidth / 2 - 16, boxHeight / 2 - 10)
+  }
+
+  private startDialogue(
+    data:
+      | Dialogue
+      | { npcId: string; name: string; isAI: true }
+      | { dialogues: Dialogue[]; startId?: string }
+      | { npcId: string; name: string; role: string; dialogues: Dialogue[]; startId?: string }
+  ) {
     if ('isAI' in data && data.isAI) {
       this.isAIMode = true
       this.aiDialogueData = { npcId: data.npcId, name: data.name }
       this.currentDialogue = null
+      this.availableDialogues = []
       this.aiConversationHistory = []
+      this.queuedDialoguePack = null
+      this.scriptedNpc = null
       this.speakerText.setText(data.name)
       this.dialogueText.setText('Привет! Чем могу помочь?')
       this.choicesContainer.removeAll(true)
@@ -674,7 +1641,69 @@ export class UIScene extends Phaser.Scene {
     } else {
       this.isAIMode = false
       this.aiDialogueData = null
-      this.currentDialogue = data as Dialogue
+      this.queuedDialoguePack = null
+      this.scriptedNpc = null
+
+      const pack = data as
+        | Dialogue
+        | { dialogues: Dialogue[]; startId?: string }
+        | { npcId: string; name: string; role: string; dialogues: Dialogue[]; startId?: string }
+
+      if ('dialogues' in pack && 'npcId' in pack && pack.npcId) {
+        this.scriptedNpc = { npcId: pack.npcId, name: pack.name, role: pack.role }
+      }
+
+      if ('dialogues' in pack && 'npcId' in pack && pack.npcId) {
+        const careerPathId = this.gameState.getCareerPath()
+        if (careerPathId && pack.startId !== `career-react-${careerPathId}`) {
+          const reactedFlagId = `careerReacted:${pack.npcId}:${careerPathId}`
+          if (!this.gameState.getFlag(reactedFlagId)) {
+            this.gameState.setFlag(reactedFlagId, true)
+            const careerPath = getCareerPath(careerPathId)
+            const careerPathName = careerPath?.name || careerPathId
+
+            const npcRole = 'role' in pack ? pack.role : ''
+            const reactionText = this.getCareerReactionLine(
+              pack.npcId,
+              pack.name,
+              npcRole,
+              careerPathName
+            )
+
+            this.queuedDialoguePack = { dialogues: pack.dialogues, startId: pack.startId }
+            const reactionDialogue: Dialogue = {
+              id: 'career-react-once',
+              lines: [
+                {
+                  speaker: pack.name,
+                  text: reactionText
+                }
+              ]
+            }
+
+            this.availableDialogues = [reactionDialogue]
+            this.currentDialogue = reactionDialogue
+            this.currentLineIndex = 0
+            this.inputField.setVisible(false)
+            this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
+            this.dialogueBox.setVisible(true)
+            this.showCurrentLine()
+
+            this.dialogueAdvanceKey.on('down', this.onDialogueAdvance, this)
+            this.dialogueEscapeKey.on('down', this.endDialogue, this)
+
+            return
+          }
+        }
+      }
+
+      if ('dialogues' in pack) {
+        this.availableDialogues = pack.dialogues
+        this.currentDialogue = pack.startId ? this.findDialogue(pack.startId) : pack.dialogues[0] || null
+      } else {
+        this.availableDialogues = [pack]
+        this.currentDialogue = pack
+      }
       this.currentLineIndex = 0
       this.inputField.setVisible(false)
       this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
@@ -698,13 +1727,41 @@ export class UIScene extends Phaser.Scene {
 
     const line = this.currentDialogue.lines[this.currentLineIndex]
     if (!line) {
+      if (this.queuedDialogueState) {
+        const state = this.queuedDialogueState
+        this.queuedDialogueState = null
+        this.availableDialogues = state.availableDialogues
+        this.currentDialogue = state.dialogue
+        this.currentLineIndex = state.lineIndex
+        this.showCurrentLine()
+
+        return
+      }
+
+      if (this.queuedDialoguePack) {
+        const pack = this.queuedDialoguePack
+        this.queuedDialoguePack = null
+        this.availableDialogues = pack.dialogues
+        this.currentDialogue = pack.startId ? this.findDialogue(pack.startId) : pack.dialogues[0] || null
+        this.currentLineIndex = 0
+        this.showCurrentLine()
+
+        return
+      }
+
       this.endDialogue()
       return
     }
 
     this.speakerText.setText(line.speaker)
     this.dialogueText.setText(line.text)
+
+    const dynamicTop = this.DIALOGUE_TEXT_TOP + this.dialogueText.height + 18
+    this.dialogueChoicesTop = Math.max(this.DIALOGUE_CHOICES_TOP, dynamicTop)
+
     this.choicesContainer.removeAll(true)
+    this.choicesContentHeight = 0
+    this.choicesStartIndex = 0
 
     if (line.choices && line.choices.length > 0) {
       this.showChoices(line.choices)
@@ -712,10 +1769,20 @@ export class UIScene extends Phaser.Scene {
     } else {
       this.dialogueHint.setText('[ПРОБЕЛ] Далее  [ESC] Закрыть')
     }
+
+    const baseHeight = this.dialogueChoicesTop + this.DIALOGUE_BOTTOM_PADDING
+    const desired = baseHeight + this.choicesContentHeight
+    this.resizeDialogueBox(desired)
+
+    if (this.currentChoices.length > 0) {
+      this.renderChoices()
+    }
   }
 
   private showChoices(choices: DialogueChoice[]) {
-    const validChoices = choices.filter((choice) => this.checkChoiceCondition(choice))
+    const injectedChoices = this.injectShowCareerPathsChoice(choices)
+    const expandedChoices = this.expandCareerPathsChoices(injectedChoices)
+    const validChoices = expandedChoices.filter((choice) => this.checkChoiceCondition(choice))
     this.currentChoices = validChoices
     this.selectedChoiceIndex = 0
     this.renderChoices()
@@ -728,26 +1795,77 @@ export class UIScene extends Phaser.Scene {
   private renderChoices() {
     this.choicesContainer.removeAll(true)
 
-    this.currentChoices.forEach((choice, index) => {
-      const isSelected = index === this.selectedChoiceIndex
+    const maxWidth = 760
+    const textX = 16
+    const paddingY = 6
+    const rowGap = 6
+
+    const heights: number[] = []
+    for (let i = 0; i < this.currentChoices.length; i++) {
+      const isSelected = i === this.selectedChoiceIndex
+      const tmp = this.add.text(0, -10000, `${isSelected ? '▶' : '▸'}  ${this.currentChoices[i].text}`, {
+        fontSize: '14px',
+        wordWrap: { width: maxWidth - textX - 10 },
+      })
+      const h = Math.max(28, tmp.height + paddingY * 2)
+      tmp.destroy()
+      heights.push(h)
+    }
+
+    this.choicesContentHeight = heights.reduce((acc, h) => acc + h + rowGap, 0)
+
+    let start = this.choicesStartIndex
+    if (this.selectedChoiceIndex < start) start = this.selectedChoiceIndex
+
+    const viewportH = this.choicesViewportHeight || 92
+    const computeEnd = (s: number) => {
+      let y = 0
+      let e = s
+      while (e < heights.length) {
+        const next = y + heights[e] + rowGap
+        if (next > viewportH && e > s) break
+        y = next
+        e += 1
+      }
+      return e
+    }
+
+    let end = computeEnd(start)
+    while (this.selectedChoiceIndex >= end && start < heights.length - 1) {
+      start += 1
+      end = computeEnd(start)
+    }
+
+    if (start < 0) start = 0
+    if (start >= heights.length) start = Math.max(0, heights.length - 1)
+    end = computeEnd(start)
+
+    this.choicesStartIndex = start
+
+    let cursorY = 0
+    for (let i = start; i < end; i++) {
+      const isSelected = i === this.selectedChoiceIndex
       const rowBg = this.add.graphics()
+
+      const choiceText = this.add.text(textX, cursorY + paddingY, `${isSelected ? '▶' : '▸'}  ${this.currentChoices[i].text}`, {
+        fontSize: '14px',
+        color: isSelected ? '#ffffff' : '#8888bb',
+        wordWrap: { width: maxWidth - textX - 10 },
+      })
+
+      const rowHeight = heights[i]
 
       if (isSelected) {
         rowBg.fillStyle(0x6c5ce7, 0.25)
-        rowBg.fillRoundedRect(-4, index * 34 - 2, 760, 28, 4)
+        rowBg.fillRoundedRect(-4, cursorY - 2, maxWidth, rowHeight + 4, 4)
         rowBg.lineStyle(1, 0x6c5ce7, 0.5)
-        rowBg.strokeRoundedRect(-4, index * 34 - 2, 760, 28, 4)
+        rowBg.strokeRoundedRect(-4, cursorY - 2, maxWidth, rowHeight + 4, 4)
       }
-
-      const choiceText = this.add.text(16, index * 34 + 6, `${isSelected ? '▶' : '▸'}  ${choice.text}`, {
-        fontSize: '14px',
-        color: isSelected ? '#ffffff' : '#8888bb',
-      })
 
       choiceText.setInteractive({ useHandCursor: true })
 
       choiceText.on('pointerover', () => {
-        this.selectedChoiceIndex = index
+        this.selectedChoiceIndex = i
         this.renderChoices()
       })
 
@@ -756,7 +1874,8 @@ export class UIScene extends Phaser.Scene {
       })
 
       this.choicesContainer.add([rowBg, choiceText])
-    })
+      cursorY += rowHeight + rowGap
+    }
   }
 
   private onChoiceUp() {
@@ -813,10 +1932,28 @@ export class UIScene extends Phaser.Scene {
       }
     }
 
+    if (choice.condition.flagSet) {
+      if (!this.gameState.getFlag(choice.condition.flagSet)) {
+        return false
+      }
+    }
+
+    if (choice.condition.flagNotSet) {
+      if (this.gameState.getFlag(choice.condition.flagNotSet)) {
+        return false
+      }
+    }
+
     return true
   }
 
   private handleChoice(choice: DialogueChoice) {
+    if (choice.startAssessment) {
+      this.startAssessment(choice.startAssessment.domainId, choice.startAssessment.questionCount)
+
+      return
+    }
+
     if (choice.stressChange) {
       this.gameState.addStress(choice.stressChange)
     }
@@ -825,16 +1962,18 @@ export class UIScene extends Phaser.Scene {
     }
 
     if (choice.startQuest) {
-      this.questManager.startQuest({
-        id: 'find-documentation',
-        title: 'Найти документацию',
-        description: 'Найдите документацию по проекту на кухне',
-        type: 'main',
-        completed: false,
-        progress: 0,
-        requiredItems: ['documentation'],
-        rewards: { respect: 20, stress: -10 },
-      })
+      if (choice.startQuest === 'find-documentation') {
+        this.questManager.startQuest({
+          id: 'find-documentation',
+          title: 'Найти документацию',
+          description: 'Найдите документацию по проекту на кухне',
+          type: 'main',
+          completed: false,
+          progress: 0,
+          requiredItems: ['documentation'],
+          rewards: { respect: 20, stress: -10 },
+        })
+      }
     }
 
     if (choice.completeQuest) {
@@ -843,6 +1982,169 @@ export class UIScene extends Phaser.Scene {
 
     if (choice.takeItem) {
       this.inventory.removeItem(choice.takeItem)
+    }
+
+    if (choice.action) {
+      let actionStr = choice.action
+      let actionParts = actionStr
+        .split(';')
+        .map((a) => a.trim())
+        .filter(Boolean)
+
+      if (actionParts.includes('showSkillTips')) {
+        this.showSkillTips()
+
+        return
+      }
+
+      const assessmentAnswer = actionParts.find((a) => a.startsWith('assessmentAnswer:'))
+      if (assessmentAnswer) {
+        const raw = assessmentAnswer.slice('assessmentAnswer:'.length)
+        const [questionId, choiceId] = raw.split(':')
+        if (questionId && choiceId) {
+          this.handleAssessmentAnswer(questionId, choiceId)
+        }
+
+        return
+      }
+
+      if (actionParts.includes('assessmentNext')) {
+        this.showAssessmentQuestion()
+
+        return
+      }
+
+      if (actionParts.includes('assessmentFinish')) {
+        this.showAssessmentSummary()
+
+        return
+      }
+
+      if (actionParts.includes('openAssessmentDomainSelect')) {
+        this.showAssessmentDomainSelect(true)
+
+        return
+      }
+
+      if (actionParts.includes('openAssessmentDomainSelectResume')) {
+        this.showAssessmentDomainSelect(false)
+
+        return
+      }
+
+      if (actionParts.includes('openCareerPathsSelect')) {
+        this.showCareerPathsSelect()
+
+        return
+      }
+
+      const resumeTo = actionParts.find((a) => a.startsWith('resumeDialogueTo:'))
+      const shouldResume = actionParts.includes('resumeDialogue')
+
+      if ((resumeTo || shouldResume) && this.queuedDialogueState) {
+        const state = this.queuedDialogueState
+        this.queuedDialogueState = null
+        this.availableDialogues = state.availableDialogues
+        this.currentDialogue = state.dialogue
+        this.currentLineIndex = state.lineIndex
+
+        let resumedToSpecificDialogue = false
+
+        if (resumeTo) {
+          const dialogueId = resumeTo.slice('resumeDialogueTo:'.length)
+          const next = dialogueId ? this.findDialogue(dialogueId) : null
+          if (next) {
+            this.currentDialogue = next
+            this.currentLineIndex = 0
+            resumedToSpecificDialogue = true
+          }
+        }
+
+        const remaining = actionParts.filter((a) => a !== 'resumeDialogue' && !a.startsWith('resumeDialogueTo:'))
+        if (remaining.length === 0) {
+          if (resumedToSpecificDialogue) {
+            this.currentLineIndex = 0
+          }
+          this.showCurrentLine()
+
+          return
+        }
+
+        if (resumedToSpecificDialogue) {
+          this.currentLineIndex = -1
+        }
+
+        actionStr = remaining.join(';')
+        actionParts = remaining
+        choice = { ...choice, action: actionStr }
+      }
+
+      if (actionParts.includes('describeCareerPaths')) {
+        this.showCareerPathsInfo()
+
+        return
+      }
+
+      let careerChanged = false
+      let careerToastText: string | null = null
+      const actions = actionStr
+        .split(';')
+        .map((a) => a.trim())
+        .filter(Boolean)
+
+      for (const action of actions) {
+        if (action.startsWith('setFlag:')) {
+          const flagId = action.slice('setFlag:'.length)
+          if (flagId) this.gameState.setFlag(flagId, true)
+        }
+
+        if (action.startsWith('setCareerPath:')) {
+          const pathId = action.slice('setCareerPath:'.length)
+          if (pathId) {
+            this.gameState.setCareerPath(pathId)
+            careerChanged = true
+
+            this.knownAssessmentDomainIds.clear()
+            this.assessmentDomainsInitialized = false
+
+            this.gameState.setFlag(`careerPath:${pathId}`, true)
+
+            const path = getAllCareerPaths().find((p) => p.id === pathId)
+            careerToastText = `Карьерный путь выбран: ${path?.name || pathId}`
+
+            if (typeof this.game.registry?.get === 'function') {
+              const assessment = this.game.registry.get('assessmentManager') as unknown
+              if (assessment && typeof (assessment as { setCareerPath?: unknown }).setCareerPath === 'function') {
+                ;(assessment as { setCareerPath: (id: string) => void }).setCareerPath(pathId)
+              }
+
+              this.refreshAssessmentModules(false)
+
+              if (assessment && typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
+                const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
+                if (level?.id) {
+                  this.gameState.setCareerLevel(level.id)
+                }
+              }
+
+              if (
+                assessment &&
+                typeof (assessment as { getAssessmentState?: unknown }).getAssessmentState === 'function'
+              ) {
+                const state = (assessment as { getAssessmentState: () => unknown }).getAssessmentState()
+                this.gameState.setAssessmentState(state as AssessmentState)
+              }
+            }
+          }
+        }
+      }
+
+      if (careerChanged) {
+        this.updateBars()
+        if (careerToastText) {
+          this.toastManager.show({ text: careerToastText, variant: 'success', durationMs: 4000 })
+        }
+      }
     }
 
     if (choice.nextDialogue && this.currentDialogue) {
@@ -860,7 +2162,10 @@ export class UIScene extends Phaser.Scene {
   }
 
   private findDialogue(_id: string): Dialogue | null {
-    return null
+    const id = _id
+    const found = this.availableDialogues.find((d) => d.id === id)
+
+    return found || null
   }
 
   private endDialogue() {
@@ -873,10 +2178,14 @@ export class UIScene extends Phaser.Scene {
     this.currentChoices = []
     this.dialogueBox.setVisible(false)
     this.currentDialogue = null
+    this.availableDialogues = []
     this.aiDialogueData = null
     this.isAIMode = false
     this.aiConversationHistory = []
     this.inputField.setVisible(false)
+    this.queuedDialoguePack = null
+    this.queuedDialogueState = null
+    this.scriptedNpc = null
     this.scene.get('GameScene').scene.resume()
   }
 
@@ -911,6 +2220,7 @@ export class UIScene extends Phaser.Scene {
     const context: AIContext = {
       playerName: 'Игрок',
       careerLevel: this.gameState.getCareerLevel(),
+      careerPath: this.gameState.getCareerPath(),
       stress: this.gameState.getStress(),
       respect: this.gameState.getRespect(),
       npcId: this.aiDialogueData.npcId,

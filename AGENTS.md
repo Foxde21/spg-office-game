@@ -1,284 +1,261 @@
-# AGENTS.md
+# AGENTS.md — orientation for AI coding agents
 
-Instructions for AI coding agents working on Office Quest game.
+Canonical guide for any AI coding agent working on this repo (Claude Code, Codex CLI, others). Keep short and current. Detailed style guide lives in `docs/contributing.md`; longer-lived facts go in the agent's memory system.
 
-## Project Overview
+## Project in one paragraph
 
-**Office Quest** — 2D point-and-click quest game built with Phaser 3 + TypeScript.
-Theme: "Path from Junior to Team Lead without burning out."
+**Office Quest** — competency-development platform framed as a 2D point-and-click game. Theme: "Path from Junior to Lead in your chosen specialisation." Eight career paths (AI, Engineering, Product, Design, QA, Analytics, HR, Management) with an NPC-driven assessment system, mini-games, multiplayer, and 30+ achievements. **Funded as an educational platform** for junior AI specialists; the codebase itself is also a teaching tool — clean flow, explicit gates (DOR / DOD), small focused agents. Stack: Phaser 3, TypeScript, Vite, Vitest (unit), Playwright (E2E), Express (AI proxy + WebSocket — partly implemented), Socket.IO (planned), OpenRouter for LLM calls. Repo: `Foxde21/spg-office-game`.
+
+**New here?** Start with [`docs/guides/onboarding.md`](docs/guides/onboarding.md).
+
+## Where things live
+
+- `src/` — Phaser game code.
+  - `scenes/` — `BootScene → PreloadScene → GameScene + UIScene`. Mini-game scenes under `scenes/minigames/` (planned).
+  - `objects/` — `Player`, `NPC`, `Item`, `Door`. Planned: `RemotePlayer`, `ArcadeMachine`, `ChatBubble`.
+  - `managers/` — singleton managers: `GameState`, `Quest`, `Inventory`, `LocationManager`, `Save`, `AIDialogue`, `Assessment`, `SkillInsights`, `Toast`. Planned: `Multiplayer`, `Achievement`.
+  - `data/` — declarative content. `locations.ts`, `npcPrompts.ts`, `careerPaths/` (plugin-style; AI is shipped, others stubbed), `skillMatrices/`.
+  - `types/` — `assessment.ts`, `ai.ts`, `Location.ts`, `index.ts`.
+  - `config.ts` — constants (`GAME_WIDTH`, `COLORS`, `ASSESSMENT_SCORING`, …).
+- `server/` — Express AI proxy (OpenRouter). Multiplayer WS planned.
+- `tests/unit/` — Vitest. `e2e/` — Playwright.
+- `docs/` — project documentation. Don't put ad-hoc notes in repo root.
+  - `requirements/` — **source of truth for game behaviour.** One file per module + `00-index.md`, `90-glossary.md`, `91-personas.md`.
+  - `architecture.md` — engine / data flow. `architecture/` — ADRs.
+  - `api.md` — managers, events, types, AI proxy contract.
+  - `spg-skill-matrix/` — skill matrix exports per role (BA, Design, Product, QA, Software Dev). Source for Skill Insights mapping.
+  - `assets.md`, `contributing.md`, `testing.md`, `game-design.md` (legacy GDD; canonical content now in `requirements/`).
+- `inputs/` — raw stakeholder material (briefs, mockups, references). **Never edited.** The BA parses these into `docs/requirements/`.
+- `backlog/todo/`, `backlog/in-progress/`, `backlog/done/` — one markdown file per story.
+- `backlog/_template.md` — story template. `backlog/dor.md`, `backlog/dod.md` — gates. `backlog/roadmap.md` — milestones / waves.
+- `.claude/agents/`, `.claude/commands/` — Claude Code helpers (3 agents, 4 commands; intentionally minimal).
+- `.codex/prompts/` — Codex CLI prompt templates (install per `.codex/prompts/README.md`).
 
 ## Commands
 
 ```bash
-npm install           # Install dependencies
-npm run dev           # Start both client + AI server (client: :3000, server: :3001)
-npm run dev:client    # Start Vite dev server only (http://localhost:3000)
-npm run dev:server    # Start Express AI proxy server only (http://localhost:3001)
-npm run build         # TypeScript check + production build
-npm run preview       # Preview production build
-
-# Testing
-npm run test          # Run unit tests (Vitest)
-npm run test:ui       # Run unit tests with UI
-npm run test:coverage # Run unit tests with coverage report
-npm run test:e2e      # Run E2E tests (Playwright)
-npm run test:e2e:ui   # Run E2E tests with UI
-npm run test:all      # Run all tests (unit + e2e)
+npm install
+npm run dev           # client (:3000) + AI server (:3001)
+npm run dev:client
+npm run dev:server
+npm run build         # tsc + vite build
+npm run test          # Vitest unit
+npm run test:ui       # Vitest with browser UI
+npm run test:e2e      # Playwright E2E
+npm run test:all
 ```
 
-## Environment Setup
+Test files: unit `tests/unit/*.test.ts`, e2e `e2e/*.spec.ts`. `.env`: `OPENROUTER_API_KEY`, `CLIENT_URL=http://localhost:3000`, `SERVER_PORT=3001`.
 
-Create `.env` file in project root:
+## Workflow (SDD + TDD)
 
-```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-CLIENT_URL=http://localhost:3000
-SERVER_PORT=3001
-```
+For every story:
 
-Get OpenRouter API key at https://openrouter.ai/keys
+1. **Spec** — DOR checklist green. The relevant module in `docs/requirements/` describes the *behaviour* the story must hit; if the story would change behaviour, update the requirement file first (or, if uncertain, log the contradiction in `docs/requirements/00-index.md` "Gaps & contradictions"). If the story touches the AI proxy contract, save format, or assessment data shape, draft the change in `docs/api.md` / `docs/architecture.md`.
+2. **Test first** — failing Vitest unit test for managers / services; Playwright spec for new user-visible flows on critical paths.
+3. **Implement** — minimum to make the test pass.
+4. **Refactor** — keep tests green; `npm run build` clean.
+5. **Review** — invoke the `code-reviewer` subagent (Claude) or do an equivalent self-review pass (Codex) before opening a PR.
+6. **Merge** — DOD checklist green, story moves to `done/`.
 
-## Testing Strategy
+## Branching (3 tiers — strict)
 
-### Unit Tests (Vitest)
-- Test managers in isolation: GameState, Inventory, Quest
-- Mock Phaser Game object
-- Fast execution, no browser needed
-- Located in `tests/unit/`
+- `main` — release branch. PRs only from `dev`.
+- `dev` — integration branch. PRs from feature branches.
+- `feature/<id>-<slug>`, `bugfix/<id>-<slug>`, `refactor/<id>-<slug>`, `docs/<id>-<slug>` — work branches off `dev`.
 
-### E2E Tests (Playwright)
-- Test gameplay flows: movement, dialogue, quests
-- Real browser testing
-- Located in `e2e/`
-- Run against dev server
+**Never commit directly to `main` or `dev`.** Each story = its own branch + PR into `dev`. Releases are PRs from `dev` to `main`.
 
-### Test File Naming
-- Unit: `*.test.ts` in `tests/unit/`
-- E2E: `*.spec.ts` in `e2e/`
+## Conventions (strict)
 
-See `docs/testing.md` for detailed testing guide.
+- **Story IDs:** `OQ-XXX`, zero-padded, monotonic. Legacy ids `001…032` stay as-is in `backlog/{todo,in-progress,done}/`. New stories use `OQ-`. Next id = `max(existing OQ-XXX, existing legacy XXX) + 1`.
+- **Branches:** `feature/OQ-042-...`, `fix/OQ-055-...`, `docs/OQ-060-...`. Legacy stories may use `feature/<num>-...` if started before this flow.
+- **Commits:** Conventional Commits with story id in scope: `feat(OQ-042): add quest reward popup`. Allowed prefixes: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `build`, `ci`.
+- **PR = one story.** Title mirrors the commit subject. Body links the story file and ticks DOD.
+- **ADRs are append-only.** Never edit an accepted ADR — supersede it.
+- **No `any`** in TypeScript outside tests. Prefer `unknown` + narrowing.
+- **No `console.log`** in shipped code. Use `Toast` for user-visible notifications.
+- Single quotes; no trailing commas in single-line literals; max 100 chars/line.
 
-## Project Structure
+## Roles
 
-```
-src/
-├── main.ts        # Entry point, Phaser game config
-├── config.ts      # Constants (GAME_WIDTH, COLORS, etc.)
-├── types/         # TypeScript interfaces
-├── scenes/        # Phaser scenes (Boot, Preload, Game, UI)
-├── objects/       # Game objects (Player, NPC, Items)
-├── managers/      # Singleton managers (GameState, Inventory, Quest, Save, AIDialogue)
-└── data/          # Game data (NPC prompts, items, quests)
+Three roles, one per concern. Claude has them as subagents in `.claude/agents/`. Codex users open the same files and play the role manually.
 
-server/
-├── index.ts       # Express server entry point
-└── routes/        # API routes (ai.ts)
-```
+- **`ba-analyst`** — owns `docs/requirements/` and `inputs/`. Turns design notes / briefs / mockups / skill-matrix exports into normalised requirement files and DOR-compliant stories. Surfaces gaps and contradictions in `docs/requirements/00-index.md`. No code.
+- **`game-dev`** — Phaser/TS work, TDD. Touches `src/`, `server/`, `tests/`, `e2e/`.
+- **`code-reviewer`** — pre-PR diff review aligned with this project's flow (story hygiene, requirements consistency, Phaser/TS patterns). Returns ordered findings with severity. Does not edit code.
 
-## Code Style
+For complex planning or refactoring: use the **built-in `Plan` agent** that Claude Code provides — there is no project-level planner subagent, intentionally (one fewer thing for newcomers to learn).
 
-### Naming Conventions
+## Slash commands
 
-| Element | Convention | Example |
-|---------|------------|---------|
-| Classes | PascalCase | `PlayerManager`, `GameScene` |
-| Interfaces | PascalCase | `Dialogue`, `PlayerData` |
-| Methods | camelCase | `updatePlayer()`, `createNPCs()` |
-| Properties | camelCase | `private speed = 200` |
-| Constants | UPPER_SNAKE | `GAME_WIDTH`, `COLORS` |
-| Files | PascalCase | `Player.ts`, `UIScene.ts` |
+Story flow (Claude — see `.claude/commands/`):
+- `/new-story "<title>"` — scaffold a new story in `backlog/todo/` with the next `OQ-XXX` id.
+- `/start-story OQ-XXX` — DOR check, branch off `dev`, move file to `in-progress/`, commit.
+- `/finish-story OQ-XXX` — DOD check, move file to `done/`, prepare PR into `dev`.
+- `/adr "<title>"` — scaffold a new ADR in `docs/architecture/`.
 
-### Imports Order
+Codex users: equivalents in `.codex/prompts/` (manual install per `.codex/prompts/README.md`) or follow the manual checklist in `backlog/README.md`.
+
+## Code style (essentials)
+
+Full guide: `docs/contributing.md` and the `## Templates and Patterns` section below. Operational essentials:
 
 ```typescript
-// 1. External libraries
-import Phaser from 'phaser'
-
-// 2. Internal modules (relative)
-import { Player } from '../objects/Player'
-import { GAME_WIDTH } from '../config'
-import type { Dialogue } from '../types'
-```
-
-### TypeScript Patterns
-
-```typescript
-// Use definite assignment for Phaser-managed properties
+// Phaser-managed properties
 private player!: Player
-private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
-
-// Early return for guards
-if (!this.body) return
-
-// Optional chaining for nullable values
-npc.dialogues?.forEach(...)
 
 // Type imports for interfaces only
 import type { Dialogue } from '../types'
-```
 
-### Class Structure
-
-```typescript
-export class Example extends Phaser.Scene {
-  // 1. Private properties with definite assignment
-  private player!: Player
-  private items: Item[] = []
-  
-  // 2. Constructor
-  constructor() {
-    super({ key: 'Example' })
-  }
-  
-  // 3. Lifecycle methods (create, update)
-  create() {}
-  update() {}
-  
-  // 4. Private methods
-  private helper() {}
-}
-```
-
-### Formatting Rules
-
-- **No comments** in code unless explicitly requested
-- Single quotes for strings: `'player'` not `"player"`
-- No trailing commas in object/array literals (unless multiline)
-- Blank line before return statements
-- Max line length: 100 characters
-
-### Error Handling
-
-```typescript
-// Use non-null assertions only for Phaser-managed objects
-this.body!.setSize(40, 60)
-
-// Guard clauses for optional values
-if (!condition) return
-
-// Throw for truly exceptional cases
-throw new Error(`Unknown NPC: ${id}`)
-```
-
-## Phaser-Specific Rules
-
-### Scene Keys
-
-Scene key must match class name:
-```typescript
-class GameScene extends Phaser.Scene {
-  constructor() {
-    super({ key: 'GameScene' })
-  }
-}
-```
-
-### Game Objects
-
-Always add to scene after creation:
-```typescript
+// Always add objects to the scene after construction
 const player = new Player(this, x, y, 'player')
-this.add.existing(player)  // Required!
+this.add.existing(player)
+
+// Cross-scene communication via events; clean up in shutdown()
+this.game.events.on('questCompleted', this.onQuestCompleted, this)
+// ...
+shutdown() {
+  this.game.events.off('questCompleted', this.onQuestCompleted, this)
+}
+
+// Toast for user notifications; never console.log
+ToastManager.getInstance(this.game).show({ text: 'Сохранено', variant: 'success' })
 ```
 
-### Event Communication
+- Scene key must match class name.
+- Singleton managers for global state. Constructor `private`. First `getInstance` call passes `game`.
+- New career paths: drop a file in `src/data/careerPaths/<name>.ts`, register in `careerPaths/index.ts`.
+- New skill matrices: `src/data/skillMatrices/<role>.ts`, register in `skillMatrices/index.ts`.
 
-Use `game.events` for cross-scene communication:
+## What not to do
+
+- Don't commit to `main` or `dev` directly. Always feature branch + PR.
+- Don't skip DOR/DOD "just this once".
+- Don't bypass the test layer. Managers get unit tests; new user-visible flows on critical paths get Playwright coverage.
+- Don't introduce a new dependency without a one-line justification in the PR.
+- Don't put ad-hoc notes in the repo root — they belong in `docs/`.
+- Don't put `console.log`, `any`, or hardcoded magic numbers into shipped code.
+- Don't edit an accepted ADR or a merged migration — supersede it.
+- Don't expose the OpenRouter API key in client code. All LLM calls go through `server/`.
+- Don't hand-edit the contents of `inputs/`. If a brief evolves, add a new dated brief.
+
+---
+
+## Templates and Patterns
+
+This section contains ready-to-use templates. Follow them exactly when creating new files.
+
+### Creating a New Scene
+
+Every scene extends `Phaser.Scene`. Scene key MUST match class name.
+
 ```typescript
-// Emit
-this.game.events.emit('questCompleted', quest)
+import Phaser from 'phaser'
+import { GameStateManager } from '../managers/GameState'
 
-// Listen
-this.game.events.on('questCompleted', this.handleQuest, this)
+export class ExampleScene extends Phaser.Scene {
+  private gameState!: GameStateManager
 
-// Clean up in shutdown
-this.game.events.off('questCompleted', this.handleQuest, this)
+  constructor() {
+    super({ key: 'ExampleScene' })
+  }
+
+  create() {
+    this.gameState = GameStateManager.getInstance(this.game)
+    this.game.events.on('someEvent', this.onSomeEvent, this)
+  }
+
+  shutdown() {
+    this.game.events.off('someEvent', this.onSomeEvent, this)
+  }
+
+  private onSomeEvent() {}
+}
 ```
 
-## Architecture Principles
+BAD — scene key does not match class name; managers initialised in constructor; missing `shutdown`. (`this.game` is undefined in constructor.)
 
-1. **Single Responsibility** — Each class does one thing
-2. **Event-Driven** — Scenes communicate via events, not direct calls
-3. **Singleton Managers** — Global state through manager classes
-4. **Strict Types** — No `any`, use proper interfaces
+### Creating a Physics Game Object (Player, NPC, Item)
 
-## Git Workflow
+Physics objects extend `Phaser.Physics.Arcade.Sprite`. They must call `scene.physics.add.existing(this)` in the constructor.
 
-### Branches
-
-- **main** — release branch (protected, only PRs from dev)
-- **dev** — development branch (protected, PRs from features)
-- **feature/\*** — feature branches
-
-**NEVER commit directly to main or dev!**
-
-### Branch Naming
-
-Each task must be done in a separate branch:
-
-```
-<type>/<ticket-id>-<short-description>
+```typescript
+export class Enemy extends Phaser.Physics.Arcade.Sprite {
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    super(scene, x, y, 'enemy-texture')
+    scene.physics.add.existing(this)
+    this.setImmovable(true)
+    this.setScale(2)
+    this.setOrigin(0.5, 0.5)
+    this.body!.setSize(16, 20)
+    this.body!.setOffset(8, 22)
+  }
+}
 ```
 
-**Types:**
-- `feature/` — new functionality
-- `bugfix/` — bug fixes
-- `refactor/` — code refactoring
+In scene:
 
-**Examples:**
-```
-feature/001-quest-system
-feature/002-inventory-system
-bugfix/003-dialogue-fix
-refactor/004-player-movement
+```typescript
+const enemy = new Enemy(this, 100, 200)
+this.add.existing(enemy)
+enemy.setDepth(10)
 ```
 
-### Workflow
+BAD — forgetting `scene.physics.add.existing(this)`; forgetting `this.add.existing(...)` in scene; accessing `this.body` without `!`.
 
-1. Pick a task from `backlog/todo/`
-2. Create branch from dev: `git checkout dev && git pull && git checkout -b feature/001-quest-system`
-3. Move task to `backlog/in-progress/`
-4. Implement, test, verify DOD
-5. Commit: `git commit -m "feat(quests): add quest system"`
-6. Push: `git push -u origin feature/001-quest-system`
-7. Create PR to dev branch
-8. After review, merge to dev
-9. When ready for release: PR from dev to main
-10. Move task to `backlog/done/`
+### Creating a Singleton Manager
 
-### Commit Messages
+```typescript
+export class ExampleManager {
+  private static instance: ExampleManager
+  private game: Phaser.Game
 
-Format: `<type>(<scope>): <message>`
+  private constructor(game: Phaser.Game) {
+    this.game = game
+  }
 
+  static getInstance(game?: Phaser.Game): ExampleManager {
+    if (!ExampleManager.instance) {
+      if (!game) throw new Error('ExampleManager.getInstance: pass `game` on first call')
+      ExampleManager.instance = new ExampleManager(game)
+    }
+    return ExampleManager.instance
+  }
+}
 ```
-feat(quests): add quest completion rewards
-fix(dialogues): fix choice effects not applying
-refactor(player): optimize movement logic
-docs(readme): update installation instructions
+
+In tests, reset between cases:
+
+```typescript
+beforeEach(() => {
+  vi.resetModules()
+})
+
+it('does the thing', async () => {
+  const { ExampleManager } = await import('../managers/Example')
+  const mgr = ExampleManager.getInstance(mockGame as any)
+  // ...
+})
 ```
 
-**NEVER commit directly to main branch.**
+### Adding a Career Path
 
-## Definition of Done
+1. `src/data/careerPaths/<name>.ts` — export `<NAME>_CAREER_PATH: CareerPath`.
+2. Add to `CAREER_PATHS` in `src/data/careerPaths/index.ts`.
+3. Update the `requirements_ref` story (`docs/requirements/11-career-paths.md`) — add the path, NPC mentor, grades, domains.
+4. The path appears in choice dialogues and the assessment / Skill Tree UI automatically.
 
-- [ ] Code runs without console errors
-- [ ] Tested manually in browser
-- [ ] TypeScript compiles without errors (`npm run build`)
-- [ ] No unused variables/imports
-- [ ] Changes committed to feature branch (not main)
-- [ ] Unit tests written for managers (if applicable)
-- [ ] All tests pass (`npm run test`)
+### Adding a Toast notification
 
-## Common Mistakes to Avoid
+```typescript
+import { ToastManager } from '../managers/Toast'
 
-- Forgetting `scene.add.existing(this)` in game objects
-- Not cleaning up event listeners on scene shutdown
-- Using `any` type instead of proper interfaces
-- Direct scene-to-scene calls (use events instead)
-- Hardcoding magic numbers (use constants from `config.ts`)
+ToastManager.getInstance(this.game).show({
+  text: 'Грейд повышен!',
+  variant: 'success',
+  durationMs: 4000,
+})
+```
 
-## Resources
-
-- [Phaser 3 Docs](https://newdocs.phaser.io/)
-- [Phaser 3 Examples](https://phaser.io/examples)
-- Project docs: `docs/architecture.md`, `docs/api.md`
+Toasts of the same `variant` queue (don't stack); different `variant`s render side-by-side.

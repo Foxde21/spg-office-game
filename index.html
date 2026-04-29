@@ -26,6 +26,11 @@
 </head>
 <body>
   <div id="game-container"></div>
+  <script>
+    if (typeof location !== 'undefined' && location.search.includes('e2e=1')) {
+      window.USE_CANVAS_RENDERER = true;
+    }
+  </script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

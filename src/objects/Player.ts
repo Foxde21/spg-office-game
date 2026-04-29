@@ -1,5 +1,12 @@
 import Phaser from 'phaser'
 
+interface MoveInput {
+  left: boolean
+  right: boolean
+  up: boolean
+  down: boolean
+}
+
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private speed = 200
   private lastDirection: 'down' | 'left' | 'up' | 'right' = 'down'
@@ -18,7 +25,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.play('player-idle-down')
   }
 
-  update(cursors: Phaser.Types.Input.Keyboard.CursorKeys) {
+  update(input: MoveInput) {
     if (!this.body) return
 
     this.body.velocity.x = 0
@@ -26,21 +33,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     let moving = false
 
-    if (cursors.left.isDown) {
+    if (input.left) {
       this.body.velocity.x = -this.speed
       this.lastDirection = 'left'
       moving = true
-    } else if (cursors.right.isDown) {
+    } else if (input.right) {
       this.body.velocity.x = this.speed
       this.lastDirection = 'right'
       moving = true
     }
 
-    if (cursors.up.isDown) {
+    if (input.up) {
       this.body.velocity.y = -this.speed
       this.lastDirection = 'up'
       moving = true
-    } else if (cursors.down.isDown) {
+    } else if (input.down) {
       this.body.velocity.y = this.speed
       this.lastDirection = 'down'
       moving = true

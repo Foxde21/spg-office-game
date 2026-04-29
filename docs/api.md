@@ -76,6 +76,60 @@ game.events.emit('gameSaved', gameState: GameState)
 game.events.emit('gameLoaded', gameState: GameState)
 ```
 
+#### Ассесменты и Skill Insights
+
+```typescript
+// Начата ассесмент-сессия
+game.events.emit('assessmentSessionStarted', {
+  careerPathId: string,
+  domainId: string,
+  assessorNpcId?: string,
+  count: number
+})
+
+// Ответ на вопрос ассесмента
+game.events.emit('assessmentAnswered', {
+  careerPathId: string,
+  questionId: string,
+  choiceId: string,
+  score: number,
+  domainId: string,
+  assessorNpcId?: string,
+  competencyTags: string[]
+})
+
+// Изменение прогресса домена
+game.events.emit('domainProgressChanged', {
+  careerPathId: string,
+  domainId: string,
+  oldScore: number,
+  newScore: number
+})
+
+// Повышение уровня в рамках карьерного пути
+game.events.emit('careerLevelUp', {
+  careerPathId: string,
+  oldLevel: string,
+  newLevel: string
+})
+
+// Завершение ассесмент-сессии
+game.events.emit('assessmentSessionCompleted', result: SessionResult)
+
+// Мини-инсайт после ответа (SkillInsightsManager)
+game.events.emit('skillInsight', {
+  npcId: string,
+  matrixId: string,
+  tag: string,
+  title: string,
+  score: number,
+  level: 'junior' | 'middle' | 'senior' | 'expert',
+  nextLevel?: 'junior' | 'middle' | 'senior' | 'expert',
+  currentExpectation: string,
+  nextExpectation?: string
+})
+```
+
 ## Менеджеры (Managers)
 
 ### GameStateManager
@@ -110,6 +164,56 @@ class GameStateManager {
   // Проверки
   isGameOver(): boolean
   canPromote(): boolean
+}
+```
+
+### AssessmentManager
+
+Управляет ассессмент-сессиями, прогрессом доменов и повышением грейда внутри выбранного карьерного пути.
+
+Хранится в `game.registry` как `assessmentManager`.
+
+```typescript
+class AssessmentManager {
+  static getInstance(game?: Phaser.Game): AssessmentManager
+
+  setCareerPath(id: string): void
+  getCareerPathId(): string | null
+
+  getCurrentLevel(): { id: string; title?: string } | null
+  getAvailableDomains(): Array<{ id: string; name: string }>
+  getDomainProgress(domainId: string): { score: number; answeredQuestions: string[] } | null
+
+  startAssessmentSession(
+    domainId: string,
+    questionCount?: number,
+    assessorNpcId?: string
+  ): { questions: AssessmentQuestion[] }
+  submitAnswer(questionId: string, choiceId: string): { score: number; feedback: string; explanation?: string }
+
+  resetDomainProgress(domainId: string): boolean
+
+  promote(): boolean
+
+  getAverageScore(): number
+  getAssessmentState(): AssessmentState
+  loadState(state: AssessmentState): void
+}
+```
+
+### SkillInsightsManager
+
+Считает EMA по `competencyTags` из события `assessmentAnswered` и эмитит `skillInsight`.
+
+```typescript
+class SkillInsightsManager {
+  private static instance: SkillInsightsManager
+
+  static getInstance(): SkillInsightsManager
+
+  getTagScore(tag: string): number
+  getTagCount(tag: string): number
+  clear(): void
 }
 ```
 
@@ -226,6 +330,31 @@ class DialogueManager {
   loadDialogues(dialogues: Record<string, Dialogue[]>): void
 }
 ```
+
+## Career Paths (реестр и данные)
+
+Типы в `src/types/assessment.ts`, данные в `src/data/careerPaths/`.
+
+### Реестр
+
+```typescript
+import { getCareerPath, getAllCareerPaths } from '../data/careerPaths'
+
+getAllCareerPaths(): CareerPath[]   // Все зарегистрированные пути
+getCareerPath(id: string): CareerPath | undefined  // Путь по id ('ai', ...)
+```
+
+### Основные типы
+
+- **CareerPath** — id, name, description, icon, levels[], domains[], npcAssessors[], unlockCondition?, finalQuestId?
+- **CareerPathLevel** — id, title, minAvgScore, minDomainScore
+- **CompetencyDomain** — id, name, description, icon, careerPathId, topics[], unlockCondition?
+- **CompetencyTopic** — id, name, level, questions[]
+- **AssessmentQuestion** — id, scenario, question, choices[], explanation, domainId, difficulty (1–4)
+- **AssessmentChoice** — id, text, score (0–100), feedback, competencyTags[]
+- **AssessmentSession**, **SessionResult**, **DomainProgress**, **CareerPathProgress** — для сессий и прогресса
+
+Константы в `config.ts`: `DEFAULT_CAREER_PATH_UNLOCK_RESPECT`, `ASSESSMENT_SCORING` (excellent/good/poor/fail).
 
 ## Типы данных
 
