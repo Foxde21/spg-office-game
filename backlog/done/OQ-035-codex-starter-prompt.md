@@ -4,7 +4,7 @@ title: Team-readiness final pass — Codex starter prompt + docs accuracy
 epic: docs
 type: docs
 estimate: 3
-status: in-progress
+status: done
 created: 2026-04-29
 owner: unassigned
 depends_on: []
@@ -39,11 +39,11 @@ so that **the team's first encounter with the repo is consistent and trustworthy
 
 ## Acceptance criteria
 
-- [ ] AC-1 — `docs/guides/codex-starter-prompt.md` exists with: (a) usage instructions for the team member; (b) a Russian-language prompt body in a single fenced code block, ready to copy and paste as the first message in a fresh Codex CLI session; (c) a fallback for users who prefer not to install `.codex/prompts/`.
-- [ ] AC-2 — `docs/guides/onboarding.md` and `docs/README.md` link to the new starter prompt file from a section visible to a Codex user (e.g. "Для новичков" / Codex Cloud / etc.).
-- [ ] AC-3 — `README.md` "Текущий статус" section either removed or replaced with a one-line pointer to `backlog/roadmap.md` — no checkboxes that contradict shipped state.
-- [ ] AC-4 — `docs/contributing.md` "Workflow разработки" section replaced with a short paragraph + bullet list of the canonical sources (`backlog/README.md`, `AGENTS.md`, `docs/guides/onboarding.md`). The legacy step-by-step is removed. The `<repo-url>` placeholder in the install snippet is replaced with `https://github.com/Foxde21/spg-office-game.git`.
-- [ ] AC-5 — `docs/architecture.md` "Бэклог задач (009-031)" updated to reflect current numbering (legacy 001-008 + 009-034, plus OQ-prefix for new stories under the new flow).
+- [x] AC-1 — `docs/guides/codex-starter-prompt.md` exists with: (a) usage instructions for the team member; (b) a Russian-language prompt body in a single fenced code block, ready to copy and paste as the first message in a fresh Codex CLI session; (c) a fallback for users who prefer not to install `.codex/prompts/`.
+- [x] AC-2 — `docs/guides/onboarding.md` and `docs/README.md` link to the new starter prompt file from a section visible to a Codex user (Prereqs and "Для новичков" respectively).
+- [x] AC-3 — `README.md` "Текущий статус" section replaced with a one-line pointer to `backlog/roadmap.md`. No stale checkboxes.
+- [x] AC-4 — `docs/contributing.md` "Workflow разработки" section replaced with a short paragraph + canonical-sources bullet list. Legacy step-by-step removed. `<repo-url>` placeholder replaced with `https://github.com/Foxde21/spg-office-game.git`.
+- [x] AC-5 — `docs/architecture.md` "Бэклог задач (009-031)" updated to "(legacy 001-008 + 009-034 + OQ-XXX для новых)".
 
 ### Non-happy paths
 
@@ -98,3 +98,5 @@ Gate: [backlog/dod.md](../dod.md). Tick in the PR, not here.
 
 - 2026-04-29 — created. DOR green; bundles Codex starter prompt + four small doc accuracy fixes for the team-readiness P2 gate.
 - 2026-04-29 — started on branch `docs/OQ-035-team-readiness` (off dev).
+- 2026-04-29 — implementation: 1 new file (`docs/guides/codex-starter-prompt.md`) + 5 fix-up edits across `docs/guides/onboarding.md`, `docs/README.md`, `README.md`, `docs/contributing.md`, `docs/architecture.md`.
+- 2026-04-29 — completed; PR pending. AC-1..5 ticked.
