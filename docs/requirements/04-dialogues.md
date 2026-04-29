@@ -75,7 +75,7 @@ Some dialogues use the AI proxy server for dynamic responses. Contract lives in 
 
 - AI calls go through `server/`. Browser never holds the OpenRouter key.
 - AI dialogue lines are structurally identical to scripted ones (same `DialogueLine` shape).
-- Q8 (`00-index.md`): fallback behaviour when the AI proxy is unreachable — scripted fallback line, retry, or silent skip.
+- Fallback behaviour when the AI proxy is unreachable: see [ADR-0001 — AI proxy fallback policy](../architecture/ADR-0001-ai-proxy-fallback.md). Three-layer: transparent retry (250 ms / 1 s) → per-NPC scripted fallback line → one-shot Toast.
 
 ## Assessment dialogues
 
@@ -92,12 +92,11 @@ A separate dialogue mode triggered by `startAssessment:*`. The assessor NPC pres
 - AC-2 — Choices with failing `condition` are not rendered (hidden by default).
 - AC-3 — Choosing an option emits `dialogueChoice` with `{ choice, npc }`; effects apply atomically before the next line is shown.
 - AC-4 — `seenDialogues` updates exactly once when a dialogue is completed (reaching a line with no `choices` and no `nextDialogue`, or via explicit `endDialogue`).
-- AC-5 — AI proxy failure is handled per Q8 outcome — never crashes the dialogue UI.
+- AC-5 — AI proxy failure follows [ADR-0001](../architecture/ADR-0001-ai-proxy-fallback.md) — never crashes the dialogue UI.
 - AC-6 — Career-choice and career-react resolution rules are deterministic and follow the order above.
 - AC-7 — `setCareerPath:<id>` is idempotent against `flags.careerPathChosen === true` (does nothing if already set, unless Q11 changes the policy).
 - AC-8 — Unknown action verbs are logged once and skipped, not crashing.
 
 ## Open questions
 
-- Q8 — AI proxy fallback policy.
 - Q11 — career path switching mid-game (changes idempotency of `setCareerPath`).

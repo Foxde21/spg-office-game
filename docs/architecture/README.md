@@ -14,6 +14,6 @@ Status flow: `Proposed → Accepted` (or `Rejected`). Mark `Accepted` only when 
 
 ## Index
 
-| #     | Title | Status | Date |
-| ----- | ----- | ------ | ---- |
-| _none yet_ |  |  |  |
+| #    | Title                                                                       | Status   | Date       |
+| ---- | --------------------------------------------------------------------------- | -------- | ---------- |
+| 0001 | [AI proxy fallback policy](ADR-0001-ai-proxy-fallback.md)                   | Accepted | 2026-04-29 |
