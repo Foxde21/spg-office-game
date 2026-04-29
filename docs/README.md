@@ -2,22 +2,33 @@
 
 ## Структура документации
 
+### Для бизнес-аналитика
+
+- **[requirements/](./requirements/00-index.md)** — **источник правды по поведению игры** (декомпозиция по модулям, gaps & contradictions, personas, glossary)
+- **[spg-skill-matrix/](./spg-skill-matrix/)** — экспорт матриц навыков (BA, Design, Product, QA, Software Dev) — кормит requirements/10-assessments.md и `src/data/skillMatrices/`
+
+### Для новичков
+
+- **[guides/onboarding.md](./guides/onboarding.md)** — твои первые 30 минут на проекте: setup, первая стори, PR.
+
 ### Для разработчиков
 
 - **[architecture.md](./architecture.md)** — архитектура проекта, структура файлов, plugin-система, roadmap
+- **[architecture/](./architecture/README.md)** — Architectural Decision Records (ADRs)
 - **[api.md](./api.md)** — API документация, менеджеры, события, типы данных
 - **[contributing.md](./contributing.md)** — руководство по разработке, стайлгайд, workflow
 - **[testing.md](./testing.md)** — стратегия тестирования (unit + e2e)
 
 ### Для дизайнеров
 
-- **[game-design.md](./game-design.md)** — GDD: карьерные пути, ассесменты, мини-игры, мультиплеер
+- **[game-design.md](./game-design.md)** — GDD: карьерные пути, ассесменты, мини-игры, мультиплеер (нарратив; формальная спецификация — в `requirements/`)
 - **[assets.md](./assets.md)** — спецификация ассетов, требования, ресурсы
 
 ### Для продакта
 
+- **[requirements/00-index.md](./requirements/00-index.md)** — карта модулей и открытых вопросов
+- **[../backlog/roadmap.md](../backlog/roadmap.md)** — milestones / waves
 - **[game-design.md](./game-design.md)** — концепция, 8 карьерных путей, метрики
-- **[Бэклог](../backlog/)** — 23 задачи (009-031) с подробными описаниями
 
 ## Быстрые ссылки
 
@@ -97,7 +108,8 @@
 
 ## Шаблоны
 
-- [Шаблон тикета](../backlog/TEMPLATE.md)
+- [Шаблон стори (новый)](../backlog/_template.md), [DOR](../backlog/dor.md), [DOD](../backlog/dod.md)
+- [ADR template](./architecture/ADR-template.md)
 
 ## Контакты
 
