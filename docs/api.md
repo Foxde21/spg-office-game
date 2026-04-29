@@ -285,28 +285,38 @@ class InventoryManager {
 ```typescript
 class SaveManager {
   private static instance: SaveManager
-  private saveKey: string = 'officeQuest_save'
+  private saveKey: string = 'officequest_save'
   
-  static getInstance(): SaveManager
+  static getInstance(game?: Phaser.Game): SaveManager
   
   // Сохранение
-  save(gameState: GameState): void
-  load(): GameState | null
-  
-  // Слоты
-  saveToSlot(slot: number, state: GameState): void
-  loadFromSlot(slot: number): GameState | null
-  getSaveSlots(): number[]
+  save(): boolean
+  load(): SaveData | null
+
+  // Импорт / экспорт
+  exportSave(): string | null
+  importSave(saveString: string): boolean
   
   // Удаление
-  deleteSave(): void
-  deleteSlot(slot: number): void
+  deleteSave(): boolean
+
+  // Метаданные
+  getSaveInfo(): { timestamp: number; version: string } | null
   
   // Проверки
   hasSave(): boolean
-  hasSlot(slot: number): boolean
+
+  // Автосейв
+  startAutoSave(): void
+  stopAutoSave(): void
 }
 ```
+
+Текущая версия save-схемы — `1.1.0`. `SaveManager.save()` сериализует
+`AssessmentManager.getAssessmentState()` в `assessment`, если игрок уже выбрал карьерный путь.
+До выбора пути поле опускается. `SaveManager.load()` мигрирует сохранения `1.0.0` без
+`assessment` в `1.1.0`, восстанавливает state через `AssessmentManager.loadState()` и сбрасывает
+AssessmentManager, если сохранение не содержит assessment-прогресс.
 
 ### DialogueManager
 
@@ -362,16 +372,26 @@ getCareerPath(id: string): CareerPath | undefined  // Путь по id ('ai', ..
 
 ```typescript
 interface GameState {
-  version: string
   player: PlayerData
-  quests: {
-    active: QuestData[]
-    completed: string[]
-  }
-  inventory: ItemData[]
   npcs: Record<string, NPCState>
   flags: Record<string, boolean>
+  assessment?: AssessmentState
+}
+```
+
+### SaveData
+
+```typescript
+interface SaveData {
+  version: string
   timestamp: number
+  player: PlayerData
+  inventory: ItemData[]
+  activeQuests: QuestData[]
+  completedQuests: string[]
+  npcs: Record<string, NPCState>
+  flags: Record<string, boolean>
+  assessment?: AssessmentState
 }
 ```
 

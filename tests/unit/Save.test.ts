@@ -6,6 +6,10 @@ class MockGame {
     on: vi.fn(),
     off: vi.fn(),
   }
+  registry = {
+    get: vi.fn(),
+    set: vi.fn(),
+  }
 }
 
 describe('SaveManager', () => {
@@ -21,6 +25,7 @@ describe('SaveManager', () => {
     const { GameStateManager } = await import('../../src/managers/GameState')
     const { InventoryManager } = await import('../../src/managers/Inventory')
     const { QuestManager } = await import('../../src/managers/Quest')
+    const { AssessmentManager } = await import('../../src/managers/Assessment')
     
     const saveInstance = (SaveManager as any).instance
     if (saveInstance) {
@@ -44,10 +49,21 @@ describe('SaveManager', () => {
       questInstance.game = mockGame
       questInstance.clear()
     }
+
+    const assessmentInstance = (AssessmentManager as any).instance
+    if (assessmentInstance) {
+      assessmentInstance.game = mockGame
+      assessmentInstance.reset()
+    }
     
     GameStateManager.getInstance(mockGame as any)
     InventoryManager.getInstance(mockGame as any)
     QuestManager.getInstance(mockGame as any)
+    const assessmentManager = AssessmentManager.getInstance(mockGame as any)
+    mockGame.registry.get.mockImplementation((key: string) => {
+      if (key === 'assessmentManager') return assessmentManager
+      return undefined
+    })
     saveManager = SaveManager.getInstance(mockGame as any)
   })
 
@@ -79,7 +95,7 @@ describe('SaveManager', () => {
     it('should include version in save data', () => {
       saveManager.save()
       const data = JSON.parse(localStorage.getItem('officequest_save')!)
-      expect(data.version).toBe('1.0.0')
+      expect(data.version).toBe('1.1.0')
     })
 
     it('should include timestamp in save data', () => {
@@ -99,7 +115,7 @@ describe('SaveManager', () => {
       saveManager.save()
       const data = saveManager.load()
       expect(data).not.toBeNull()
-      expect(data.version).toBe('1.0.0')
+      expect(data.version).toBe('1.1.0')
     })
 
     it('should emit gameLoaded event', () => {
@@ -107,6 +123,107 @@ describe('SaveManager', () => {
       mockGame.events.emit.mockClear()
       saveManager.load()
       expect(mockGame.events.emit).toHaveBeenCalledWith('gameLoaded', expect.any(Object))
+    })
+  })
+
+  describe('assessment state migration', () => {
+    it('should migrate v1.0.0 saves without assessment to v1.1.0', () => {
+      const legacySave = {
+        version: '1.0.0',
+        timestamp: 1000,
+        player: {
+          name: 'Player',
+          careerLevel: 'junior',
+          stress: 0,
+          respect: 0,
+          inventory: [],
+          completedQuests: [],
+          currentQuests: [],
+        },
+        inventory: [],
+        activeQuests: [],
+        completedQuests: [],
+        npcs: {},
+        flags: {},
+      }
+
+      localStorage.setItem('officequest_save', JSON.stringify(legacySave))
+
+      const data = saveManager.load()
+
+      expect(data).not.toBeNull()
+      expect(data!.version).toBe('1.1.0')
+      expect(data!.assessment).toBeUndefined()
+    })
+
+    it('should serialize assessment manager state when saving', async () => {
+      const { AssessmentManager } = await import('../../src/managers/Assessment')
+      const assessmentManager = AssessmentManager.getInstance(mockGame as any)
+
+      assessmentManager.setCareerPath('ai')
+      saveManager.save()
+
+      const data = JSON.parse(localStorage.getItem('officequest_save')!)
+
+      expect(data.assessment).toEqual(assessmentManager.getAssessmentState())
+      expect(data.assessment.chosenCareerPathId).toBe('ai')
+    })
+
+    it('should omit assessment when no career path has been chosen', () => {
+      saveManager.save()
+
+      const data = JSON.parse(localStorage.getItem('officequest_save')!)
+
+      expect(data.assessment).toBeUndefined()
+    })
+
+    it('should restore assessment manager state when loading', async () => {
+      const { AssessmentManager } = await import('../../src/managers/Assessment')
+      const assessmentManager = AssessmentManager.getInstance(mockGame as any)
+      const assessment = {
+        chosenCareerPathId: 'ai',
+        careerPathProgress: {
+          careerPathId: 'ai',
+          currentLevel: 'ai-middle',
+          totalAssessments: 2,
+          averageScore: 64,
+          domainProgress: {
+            'ml-fundamentals': {
+              domainId: 'ml-fundamentals',
+              score: 64,
+              answeredQuestions: ['ai-ml-fun-01', 'ai-ml-fun-02'],
+              lastAssessmentDate: 1000,
+            },
+          },
+        },
+      }
+      const save = {
+        version: '1.1.0',
+        timestamp: 1000,
+        player: {
+          name: 'Player',
+          careerLevel: 'ai-junior',
+          careerPath: 'ai',
+          stress: 0,
+          respect: 0,
+          inventory: [],
+          completedQuests: [],
+          currentQuests: [],
+        },
+        inventory: [],
+        activeQuests: [],
+        completedQuests: [],
+        npcs: {},
+        flags: { careerPathChosen: true },
+        assessment,
+      }
+
+      localStorage.setItem('officequest_save', JSON.stringify(save))
+
+      const data = saveManager.load()
+
+      expect(data!.assessment).toEqual(assessment)
+      expect(assessmentManager.getAssessmentState()).toEqual(assessment)
     })
   })
 
@@ -147,7 +264,7 @@ describe('SaveManager', () => {
       saveManager.save()
       const info = saveManager.getSaveInfo()
       expect(info).not.toBeNull()
-      expect(info!.version).toBe('1.0.0')
+      expect(info!.version).toBe('1.1.0')
       expect(info!.timestamp).toBeDefined()
     })
   })
@@ -162,7 +279,7 @@ describe('SaveManager', () => {
       const saveString = saveManager.exportSave()
       expect(saveString).not.toBeNull()
       const data = JSON.parse(saveString!)
-      expect(data.version).toBe('1.0.0')
+      expect(data.version).toBe('1.1.0')
     })
   })
 

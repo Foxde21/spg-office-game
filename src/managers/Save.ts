@@ -1,12 +1,18 @@
 import Phaser from 'phaser'
 import type { SaveData } from '../types'
+import type { AssessmentState } from '../types/assessment'
+import { AssessmentManager } from './Assessment'
 import { GameStateManager } from './GameState'
 import { InventoryManager } from './Inventory'
 import { QuestManager } from './Quest'
 
-const SAVE_VERSION = '1.0.0'
+const SAVE_VERSION = '1.1.0'
 const SAVE_KEY = 'officequest_save'
 const AUTO_SAVE_INTERVAL = 60000
+
+function hasAssessmentState(state: AssessmentState): boolean {
+  return Boolean(state.chosenCareerPathId || state.careerPathProgress)
+}
 
 export class SaveManager {
   private static instance: SaveManager
@@ -29,6 +35,8 @@ export class SaveManager {
       const gameState = GameStateManager.getInstance(this.game)
       const inventory = InventoryManager.getInstance(this.game)
       const questManager = QuestManager.getInstance(this.game)
+      const assessmentManager = AssessmentManager.getInstance(this.game)
+      const assessment = assessmentManager.getAssessmentState()
 
       const saveData: SaveData = {
         version: SAVE_VERSION,
@@ -39,7 +47,7 @@ export class SaveManager {
         completedQuests: questManager.getCompletedQuests(),
         npcs: gameState.getState().npcs,
         flags: gameState.getState().flags,
-        assessment: gameState.getAssessmentState(),
+        assessment: hasAssessmentState(assessment) ? assessment : undefined,
       }
 
       localStorage.setItem(SAVE_KEY, JSON.stringify(saveData))
@@ -63,6 +71,7 @@ export class SaveManager {
       const gameState = GameStateManager.getInstance(this.game)
       const inventory = InventoryManager.getInstance(this.game)
       const questManager = QuestManager.getInstance(this.game)
+      const assessmentManager = AssessmentManager.getInstance(this.game)
 
       gameState.setState({
         player: migratedData.player,
@@ -71,23 +80,15 @@ export class SaveManager {
         assessment: migratedData.assessment,
       })
 
-      const regGet = this.game.registry?.get
-      if (typeof regGet === 'function') {
-        const assessment = this.game.registry.get('assessmentManager') as unknown
-        if (
-          migratedData.assessment &&
-          assessment &&
-          typeof (assessment as { loadState?: unknown }).loadState === 'function'
-        ) {
-          ;(assessment as { loadState: (state: unknown) => void }).loadState(migratedData.assessment)
+      if (migratedData.assessment) {
+        assessmentManager.loadState(migratedData.assessment)
 
-          if (typeof (assessment as { getCurrentLevel?: unknown }).getCurrentLevel === 'function') {
-            const level = (assessment as { getCurrentLevel: () => { id: string } | null }).getCurrentLevel()
-            if (level?.id) {
-              gameState.setCareerLevel(level.id)
-            }
-          }
+        const level = assessmentManager.getCurrentLevel()
+        if (level?.id) {
+          gameState.setCareerLevel(level.id)
         }
+      } else {
+        assessmentManager.reset()
       }
 
       inventory.clear()
@@ -141,11 +142,28 @@ export class SaveManager {
       migrated.completedQuests = []
     }
 
-    if (!migrated.assessment) {
+    if (this.versionLessThan(migrated.version, '1.1.0')) {
       migrated.assessment = undefined
+      migrated.version = '1.1.0'
     }
 
     return migrated
+  }
+
+  private versionLessThan(version: string, target: string): boolean {
+    const parse = (value: string): number[] => value.split('.').map((part) => Number(part) || 0)
+    const currentParts = parse(version)
+    const targetParts = parse(target)
+    const length = Math.max(currentParts.length, targetParts.length)
+
+    for (let i = 0; i < length; i++) {
+      const current = currentParts[i] || 0
+      const expected = targetParts[i] || 0
+      if (current < expected) return true
+      if (current > expected) return false
+    }
+
+    return false
   }
 
   hasSave(): boolean {
