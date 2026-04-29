@@ -4,29 +4,29 @@
 
 `AGENTS.md` (imported above) is the canonical guide for any AI coding agent on this repo (Claude Code, Codex CLI). Anything tool-specific lives below.
 
-## Subagents (Claude-only)
+## Subagents
 
-- `game-dev` — Phaser 3 + TypeScript work, TDD-first.
-- `ba-analyst` — turns design ideas / spec fragments into DOR-compliant stories; owns `docs/requirements/`.
-- `code-reviewer` — pre-PR review against `dev` / `main`. (Generic-purpose reviewer; this project also has the inventory-tool-flow specific story-hygiene checks documented in the agent file.)
-- `typescript-reviewer`, `build-error-resolver`, `planner`, `tdd-guide` — generic helpers from earlier setup, kept.
-- `team-lead`, `team-implementor`, `team-reviewer`, `team-tester`, `team-content-writer` — alternative orchestrated team mode (`/team`).
+Three roles, one per concern. Codex users open the same files and play the role manually.
 
-Codex users do not have subagents; they read the role definitions in `.claude/agents/` and embody them manually.
+- `ba-analyst` — owns `docs/requirements/` and `inputs/`. Turns briefs / mockups / skill-matrix exports into DOR-compliant stories. No code.
+- `game-dev` — Phaser 3 + TypeScript work, TDD-first. Touches `src/`, `server/`, `tests/`, `e2e/`.
+- `code-reviewer` — pre-PR diff review. Returns ordered findings with severity. Does not edit code.
+
+For complex planning or refactoring: use the **built-in `Plan` agent** (Claude Code provides it) — there is no project-level planner subagent, intentionally.
 
 ## Slash commands
 
-Inventory-tool flow (Claude):
-- `/new-story`, `/start-story`, `/finish-story`, `/adr` — see `.claude/commands/`.
+Story flow (Claude — see `.claude/commands/`):
+- `/new-story "<title>"` — scaffold a new story in `backlog/todo/` with the next `OQ-XXX` id.
+- `/start-story OQ-XXX` — DOR check, branch off `dev`, move to `in-progress/`, commit.
+- `/finish-story OQ-XXX` — DOD check, move to `done/`, prepare PR into `dev`.
+- `/adr "<title>"` — scaffold a new ADR in `docs/architecture/`.
 
-Pre-existing helpers (Claude):
-- `/plan`, `/build-fix`, `/code-review`, `/test-coverage`, `/team`.
-
-For Codex users: equivalents of the inventory-tool flow live in `.codex/prompts/` (install via `cp` / `ln -s` to `~/.codex/prompts/`) and as a manual checklist in `backlog/README.md`.
+Codex users: equivalents in `.codex/prompts/` (install via `cp` to `~/.codex/prompts/`) or follow the manual checklist in `backlog/README.md`.
 
 ## Critical Phaser / TS patterns (quick reference)
 
-For full templates and bad-pattern examples, see the `## Templates and Patterns` section in `AGENTS.md`. Highlights:
+Full templates and bad-pattern examples in the `## Templates and Patterns` section of `AGENTS.md`. Highlights:
 
 1. Physics objects: `scene.physics.add.existing(this)` in constructor → `this.add.existing(obj)` in scene.
 2. Phaser `body` access: always `!` — `this.body!.setSize(...)`.
@@ -35,3 +35,7 @@ For full templates and bad-pattern examples, see the `## Templates and Patterns`
 5. Constants in `src/config.ts`; never inline magic numbers / strings.
 6. `import type` for interfaces; no `any` outside tests.
 7. New `LocationId` must be added to the union type in `src/types/Location.ts`.
+
+## New here?
+
+Read [`docs/guides/onboarding.md`](docs/guides/onboarding.md) — your first 30 minutes on the project.

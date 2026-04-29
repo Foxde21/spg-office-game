@@ -4,7 +4,9 @@ Canonical guide for any AI coding agent working on this repo (Claude Code, Codex
 
 ## Project in one paragraph
 
-**Office Quest** — competency-development platform framed as a 2D point-and-click game. Theme: "Path from Junior to Lead in your chosen specialisation." Eight career paths (AI, Engineering, Product, Design, QA, Analytics, HR, Management) with an NPC-driven assessment system, mini-games, multiplayer (chat / duels / team assessments / leaderboard), and 30+ achievements. Stack: Phaser 3, TypeScript, Vite, Vitest (unit), Playwright (E2E), Express (AI proxy + WebSocket — partly implemented), Socket.IO (planned), OpenRouter for LLM calls. Repo: `Foxde21/spg-office-game`.
+**Office Quest** — competency-development platform framed as a 2D point-and-click game. Theme: "Path from Junior to Lead in your chosen specialisation." Eight career paths (AI, Engineering, Product, Design, QA, Analytics, HR, Management) with an NPC-driven assessment system, mini-games, multiplayer, and 30+ achievements. **Funded as an educational platform** for junior AI specialists; the codebase itself is also a teaching tool — clean flow, explicit gates (DOR / DOD), small focused agents. Stack: Phaser 3, TypeScript, Vite, Vitest (unit), Playwright (E2E), Express (AI proxy + WebSocket — partly implemented), Socket.IO (planned), OpenRouter for LLM calls. Repo: `Foxde21/spg-office-game`.
+
+**New here?** Start with [`docs/guides/onboarding.md`](docs/guides/onboarding.md).
 
 ## Where things live
 
@@ -26,7 +28,7 @@ Canonical guide for any AI coding agent working on this repo (Claude Code, Codex
 - `inputs/` — raw stakeholder material (briefs, mockups, references). **Never edited.** The BA parses these into `docs/requirements/`.
 - `backlog/todo/`, `backlog/in-progress/`, `backlog/done/` — one markdown file per story.
 - `backlog/_template.md` — story template. `backlog/dor.md`, `backlog/dod.md` — gates. `backlog/roadmap.md` — milestones / waves.
-- `.claude/agents/`, `.claude/commands/`, `.claude/rules/` — Claude Code helpers.
+- `.claude/agents/`, `.claude/commands/` — Claude Code helpers (3 agents, 4 commands; intentionally minimal).
 - `.codex/prompts/` — Codex CLI prompt templates (install per `.codex/prompts/README.md`).
 
 ## Commands
@@ -77,24 +79,23 @@ For every story:
 
 ## Roles
 
-Claude has these as subagents in `.claude/agents/`. Codex CLI users open the same files and play the role manually.
+Three roles, one per concern. Claude has them as subagents in `.claude/agents/`. Codex users open the same files and play the role manually.
 
-- **`game-dev`** — Phaser/TS work, TDD. Touches `src/`, `server/`, `tests/`, `e2e/`.
 - **`ba-analyst`** — owns `docs/requirements/` and `inputs/`. Turns design notes / briefs / mockups / skill-matrix exports into normalised requirement files and DOR-compliant stories. Surfaces gaps and contradictions in `docs/requirements/00-index.md`. No code.
-- **`code-reviewer`** — pre-PR diff review (this repo's reviewer is generic-purpose and well-tuned; see `.claude/agents/code-reviewer.md`). Returns ordered findings with severity. Does not edit code.
-- Other agents (`typescript-reviewer`, `build-error-resolver`, `planner`, `tdd-guide`, `team-*`) — kept from earlier setup, useful for specific situations (build breaks, planning, paired-team mode).
+- **`game-dev`** — Phaser/TS work, TDD. Touches `src/`, `server/`, `tests/`, `e2e/`.
+- **`code-reviewer`** — pre-PR diff review aligned with this project's flow (story hygiene, requirements consistency, Phaser/TS patterns). Returns ordered findings with severity. Does not edit code.
+
+For complex planning or refactoring: use the **built-in `Plan` agent** that Claude Code provides — there is no project-level planner subagent, intentionally (one fewer thing for newcomers to learn).
 
 ## Slash commands
 
-Inventory-tool flow (Claude — see `.claude/commands/`):
+Story flow (Claude — see `.claude/commands/`):
 - `/new-story "<title>"` — scaffold a new story in `backlog/todo/` with the next `OQ-XXX` id.
 - `/start-story OQ-XXX` — DOR check, branch off `dev`, move file to `in-progress/`, commit.
 - `/finish-story OQ-XXX` — DOD check, move file to `done/`, prepare PR into `dev`.
 - `/adr "<title>"` — scaffold a new ADR in `docs/architecture/`.
 
-Earlier helpers (Claude): `/plan`, `/build-fix`, `/code-review`, `/test-coverage`, `/team`.
-
-Codex users: equivalents of the inventory-tool flow in `.codex/prompts/` (manual install per `.codex/prompts/README.md`) or follow the manual checklist in `backlog/README.md`.
+Codex users: equivalents in `.codex/prompts/` (manual install per `.codex/prompts/README.md`) or follow the manual checklist in `backlog/README.md`.
 
 ## Code style (essentials)
 
