@@ -23,5 +23,5 @@ Do the following:
    - Leave `epic`, `type`, `estimate`, `owner`, refs as stubs for the user to fill.
 6. Replace the `# OQ-XXX — <title>` heading with the concrete id and title.
 7. Add a first changelog entry: `- YYYY-MM-DD — created via /new-story.`
-8. Do **not** commit. Leave the file in the working tree so the user (or the `ba-analyst` subagent) can fill in scope and ACs, then decide when to commit.
-9. Report to the user: the path of the created file and the next natural step ("fill in scope, ACs, design notes; when DOR is green, run `/start-story OQ-XXX`").
+8. **Do not commit, and do not `git add`.** Leave the file **untracked** in the working tree. We never commit directly to `dev`; the file will be staged on the feature branch when `/start-story` runs (it expects an untracked OQ-XXX file by design).
+9. Report to the user: the path of the created file, that it is intentionally untracked, and the next natural step ("fill in scope, ACs, design notes; when DOR is green, run `/start-story OQ-XXX`").
