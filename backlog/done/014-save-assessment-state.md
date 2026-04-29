@@ -11,22 +11,22 @@
 - [x] Определены необходимые ресурсы/ассеты
 
 ## Definition of Done (DOD)
-- [ ] Код написан и работает
-- [ ] Код соответствует стайлгайду
-- [ ] Функционал протестирован вручную
-- [ ] Нет консольных ошибок
-- [ ] Документация обновлена (если требуется)
-- [ ] Код прошел ревью (если требуется)
+- [x] Код написан и работает
+- [x] Код соответствует стайлгайду
+- [x] Функционал протестирован вручную
+- [x] Нет консольных ошибок
+- [x] Документация обновлена (если требуется)
+- [x] Код прошел ревью (если требуется)
 
 ## Критерии приемки
-1. `SaveData` расширен полем `assessment?: AssessmentState`
-2. `SaveManager.save()` сериализует AssessmentManager state
-3. `SaveManager.load()` восстанавливает AssessmentManager state
-4. Старые сохранения без поля `assessment` загружаются без ошибок (migration)
-5. SAVE_VERSION обновлён (например, с '1.0.0' на '1.1.0')
-6. `migrateSaveData` корректно мигрирует v1.0.0 → v1.1.0
-7. Автосейв включает assessment-данные
-8. Написаны unit-тесты на миграцию сохранений
+1. [x] `SaveData` расширен полем `assessment?: AssessmentState`
+2. [x] `SaveManager.save()` сериализует AssessmentManager state
+3. [x] `SaveManager.load()` восстанавливает AssessmentManager state
+4. [x] Старые сохранения без поля `assessment` загружаются без ошибок (migration)
+5. [x] SAVE_VERSION обновлён (например, с '1.0.0' на '1.1.0')
+6. [x] `migrateSaveData` корректно мигрирует v1.0.0 → v1.1.0
+7. [x] Автосейв включает assessment-данные
+8. [x] Написаны unit-тесты на миграцию сохранений
 
 ## Технические детали
 
@@ -95,3 +95,6 @@ const SAVE_VERSION = '1.1.0'
 
 ## Метки
 - `feature`, `core`
+
+## Change log
+- 2026-04-29 — completed on branch feature/014-save-assessment-state.
