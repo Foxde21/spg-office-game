@@ -7,6 +7,10 @@
 - **[requirements/](./requirements/00-index.md)** — **источник правды по поведению игры** (декомпозиция по модулям, gaps & contradictions, personas, glossary)
 - **[spg-skill-matrix/](./spg-skill-matrix/)** — экспорт матриц навыков (BA, Design, Product, QA, Software Dev) — кормит requirements/10-assessments.md и `src/data/skillMatrices/`
 
+### Для новичков
+
+- **[guides/onboarding.md](./guides/onboarding.md)** — твои первые 30 минут на проекте: setup, первая стори, PR.
+
 ### Для разработчиков
 
 - **[architecture.md](./architecture.md)** — архитектура проекта, структура файлов, plugin-система, roadmap
