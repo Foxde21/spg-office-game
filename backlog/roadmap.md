@@ -4,7 +4,33 @@ High-level direction. Lists waves and the epics inside them. Stories under `back
 
 ## Vision (current — 2026-04)
 
-Office Quest evolved from a single-track career simulator into a **competency-development platform** with eight career paths, NPC-driven assessments, mini-games, multiplayer, and achievements. v2 vision frozen in [`inputs/briefs/2026-04-29-platform-vision.md`](../inputs/briefs/2026-04-29-platform-vision.md). Story 032 (AI-Employee mode) is a planned second game mode where an LLM plays the protagonist; not in any wave yet.
+Office Quest evolved from a single-track career simulator into a **competency-development platform** with eight career paths, NPC-driven assessments, mini-games, multiplayer, and achievements. **Funded as an educational platform for junior AI specialists.** v2 vision frozen in [`inputs/briefs/2026-04-29-platform-vision.md`](../inputs/briefs/2026-04-29-platform-vision.md). Story 032 (AI-Employee mode) is a planned second game mode where an LLM plays the protagonist; not in any wave yet.
+
+## Delivery phases
+
+The roadmap below is organised by **waves** (game-feature scope). The **phases** below map waves to educational delivery — what's needed for the platform to be usable by each cohort. Phase boundaries are gates: don't skip a phase to chase a wave further down.
+
+| Phase | Goal                                                  | Gate to next phase                                                                                  | Maps to            |
+| ----- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------ |
+| **P0** | Foundation cleanup (this PR)                          | Single, clean flow live on `dev`. CLAUDE / AGENTS / `.claude/agents` / `.claude/commands` reduced to the 3-role + 4-command set. Onboarding doc shipped. | This branch        |
+| **P1** | AI track playable end-to-end                          | A new contributor can pick the AI path, complete an assessment, see Skill Tree progress, hit AI Architect ending. Gaps Q1, Q10 closed. | Wave 1 + Wave 2    |
+| **P2** | Cohort-ready                                          | First cohort of junior AI students can self-onboard from `docs/guides/onboarding.md` and ship a real PR. Documentation complete; "good first issues" curated. | This phase         |
+| **P3** | First cohort                                          | 5–10 students complete a story end-to-end through the platform. Feedback collected and triaged.       | Cohort run         |
+| **P4** | Multi-track                                           | At least 3 of the 8 career paths feature-complete (AI + 2 more).                                    | Wave 3             |
+| **P5** | Community / multiplayer                               | Async chat in kitchen + leaderboard live. Identity model (Q13) decided.                              | Wave 4 + Wave 6    |
+| **P6** | Mini-games for soft skills                             | Game Room shipped with all three arcade games.                                                      | Wave 5             |
+| **P7** | AI-Employee mode                                      | Q12 security ADR accepted; AI-Employee mode behind a feature flag.                                  | Wave 7             |
+
+### What "cohort-ready" (P2) means concretely
+
+P2 is the gate to first real student use. Until P2 is met, the platform is "internal experiment". Concrete criteria:
+
+- [ ] `docs/guides/onboarding.md` rehearsed by at least one external person who isn't on the maintainer team
+- [ ] Stories tagged `good-first-issue` (frontmatter or curated list) — at least 5
+- [ ] DOR / DOD verbiage reviewed for junior-friendliness
+- [ ] At least one walkthrough video or written log of "first contribution" path
+- [ ] An ADR per gap that blocks educational use (e.g. AI proxy fallback Q8 — students mustn't see crashes)
+- [ ] Decision: do students contribute on `dev` or on a `cohort/<n>` long-running branch? (open call — not in this PR)
 
 ## Waves
 
@@ -106,4 +132,5 @@ See [`docs/requirements/00-index.md`](../docs/requirements/00-index.md) "Gaps & 
 
 ## Change log
 
+- 2026-04-29 — added 8 educational delivery phases (P0–P7) layered over the waves; tied to the funded mission as an educational platform for junior AI specialists.
 - 2026-04-29 — roadmap reorganised into 7 waves around v2 platform vision; legacy stories noted as long-running.
