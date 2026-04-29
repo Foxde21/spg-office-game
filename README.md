@@ -49,11 +49,12 @@ npm run test:all      # Все тесты
 
 ## Документация
 
-Полная документация в папке `docs/`:
+Полная документация в папке `docs/` (карта — [docs/README.md](./docs/README.md)):
 
-- **[Архитектура](./docs/architecture.md)** — структура проекта, принципы
-- **[Геймдизайн](./docs/game-design.md)** — механики, персонажи, сюжет
+- **[Требования](./docs/requirements/00-index.md)** — декомпозиция игрового дизайна по модулям, personas, открытые вопросы (источник правды по поведению)
+- **[Архитектура](./docs/architecture.md)** + **[ADR](./docs/architecture/README.md)** — архитектурные решения
 - **[API](./docs/api.md)** — менеджеры, события, типы данных
+- **[Геймдизайн](./docs/game-design.md)** — нарратив (механики, персонажи, сюжет — формальная спецификация в `docs/requirements/`)
 - **[Ассеты](./docs/assets.md)** — требования к графике и звуку
 - **[Разработка](./docs/contributing.md)** — workflow, стайлгайд
 - **[Тестирование](./docs/testing.md)** — Vitest + Playwright
@@ -71,13 +72,13 @@ npm run test:all      # Все тесты
 
 ## Бэклог
 
-Управление задачами в папке `backlog/`:
+Управление задачами в папке `backlog/` (одна стори — один markdown):
 
-- **[todo/](./backlog/todo/)** — задачи к выполнению
-- **[in-progress/](./backlog/in-progress/)** — в работе
-- **[done/](./backlog/done/)** — выполненные
+- **[todo/](./backlog/todo/)** — готовые к взятию (DOR ✅)
+- **[in-progress/](./backlog/in-progress/)** — в работе (одна ветка от `dev`)
+- **[done/](./backlog/done/)** — смерджено
 
-[Читать о workflow](./backlog/README.md)
+- [Workflow](./backlog/README.md) · [DOR](./backlog/dor.md) · [DOD](./backlog/dod.md) · [Roadmap (waves)](./backlog/roadmap.md) · [Шаблон стори](./backlog/_template.md)
 
 ## Текущий статус
 
