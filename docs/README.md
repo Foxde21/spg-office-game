@@ -10,6 +10,7 @@
 ### Для новичков
 
 - **[guides/onboarding.md](./guides/onboarding.md)** — твои первые 30 минут на проекте: setup, первая стори, PR.
+- **[guides/codex-starter-prompt.md](./guides/codex-starter-prompt.md)** — стартовый промпт для пользователей Codex CLI (вставить как первое сообщение в новой сессии).
 
 ### Для разработчиков
 

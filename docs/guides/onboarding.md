@@ -11,7 +11,7 @@ Welcome. This is your guided walkthrough from "fresh clone" to "first PR opened"
 - Node.js 18+ and npm 9+.
 - Git with a working `gh` CLI logged in (`gh auth status` succeeds).
 - A code editor — anything works; the project uses TypeScript so a TS-aware editor (VS Code, JetBrains) is recommended.
-- Optional: an LLM CLI (Claude Code or Codex CLI). Both are supported; pick whichever your team uses.
+- Optional: an LLM CLI (Claude Code or Codex CLI). Both are supported; pick whichever your team uses. Codex users — see [`codex-starter-prompt.md`](codex-starter-prompt.md) for the first-message prompt to paste into your session.
 
 ## 1. Clone and run (5 min)
 

@@ -18,7 +18,7 @@ Office Quest — 2D point-and-click квест / карьерный симуля
 
 ```
 spg-office-game/
-├── backlog/                 # Бэклог задач (009-031)
+├── backlog/                 # Бэклог задач (legacy 001-008 + 009-034 + OQ-XXX для новых)
 │   ├── todo/               # Готовые к работе
 │   ├── in-progress/        # В работе
 │   ├── done/               # Выполненные
