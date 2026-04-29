@@ -4,7 +4,7 @@ title: ADR-0001 — AI proxy fallback policy (resolves Q8)
 epic: ai
 type: docs
 estimate: 2
-status: in-progress
+status: done
 created: 2026-04-29
 owner: unassigned
 depends_on: []
@@ -43,10 +43,10 @@ so that **I can implement consistently across all callers and stop blocking on Q
 
 ## Acceptance criteria
 
-- [ ] AC-1 — `docs/architecture/ADR-0001-ai-proxy-fallback.md` exists with all template sections filled (Context, Decision, Consequences, Alternatives, References) and `Status: Accepted`.
-- [ ] AC-2 — `docs/architecture/README.md` index includes a row for ADR-0001 with a link.
-- [ ] AC-3 — `docs/requirements/04-dialogues.md` AC-5 reads "AI proxy failure follows ADR-0001" instead of "per Q8 outcome", with a link to the ADR.
-- [ ] AC-4 — `docs/requirements/00-index.md` Q8 row reads "Resolved by ADR-0001" with a link, and is moved out of the active list (kept in change log).
+- [x] AC-1 — `docs/architecture/ADR-0001-ai-proxy-fallback.md` exists with all template sections filled (Context, Decision, Consequences, Alternatives, References) and `Status: Accepted`.
+- [x] AC-2 — `docs/architecture/README.md` index includes a row for ADR-0001 with a link.
+- [x] AC-3 — `docs/requirements/04-dialogues.md` AC-5 reads "AI proxy failure follows ADR-0001" instead of "per Q8 outcome", with a link to the ADR.
+- [x] AC-4 — `docs/requirements/00-index.md` Q8 row reads "Resolved by ADR-0001" (struck through, status `Closed`), with a change-log entry.
 
 ### Non-happy paths
 
@@ -110,3 +110,5 @@ Gate: [backlog/dod.md](../dod.md). Tick in the PR, not here.
 
 - 2026-04-29 — created via `/new-story`. DOR green; awaiting user confirmation on the proposed fallback policy (see Design notes) before `/start-story`.
 - 2026-04-29 — design confirmed by Fox; started on branch `docs/OQ-033-adr-ai-proxy-fallback` (off dev).
+- 2026-04-29 — ADR-0001 written; Q8 closed; AC-1..4 ticked. Doc-only story, no code/tests/build.
+- 2026-04-29 — completed; PR pending.
